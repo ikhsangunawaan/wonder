@@ -129,8 +129,16 @@ class Database:
                     end_time DATETIME,
                     prize TEXT,
                     requirements TEXT,
+                    required_roles TEXT,
+                    forbidden_roles TEXT,
+                    winner_role_id TEXT,
+                    min_messages INTEGER DEFAULT 0,
+                    min_account_age_days INTEGER DEFAULT 0,
+                    bypass_roles TEXT,
                     status TEXT DEFAULT 'active',
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    ended_at DATETIME,
+                    reroll_count INTEGER DEFAULT 0
                 )
             """)
 
@@ -144,6 +152,19 @@ class Database:
                     entry_time DATETIME DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY(giveaway_id) REFERENCES giveaways(id),
                     UNIQUE(giveaway_id, user_id)
+                )
+            """)
+
+            # Giveaway winners table
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS giveaway_winners (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    giveaway_id INTEGER,
+                    user_id TEXT,
+                    winner_position INTEGER,
+                    selected_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    is_reroll BOOLEAN DEFAULT FALSE,
+                    FOREIGN KEY(giveaway_id) REFERENCES giveaways(id)
                 )
             """)
 

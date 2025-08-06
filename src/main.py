@@ -3,7 +3,7 @@ from discord.ext import commands, tasks
 import asyncio
 import os
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from pathlib import Path
 import sys
 
@@ -456,18 +456,294 @@ async def rank(ctx: commands.Context, user: discord.Member = None):
     
     await ctx.send(embed=embed)
 
-# Admin Commands
-@commands.command(name='giveaway')
+# =============================================================================
+# ADVANCED GIVEAWAY COMMANDS
+# =============================================================================
+
+def parse_role_mentions(role_str: str, guild: discord.Guild) -> List[discord.Role]:
+    """Parse role mentions or names from string"""
+    if not role_str:
+        return []
+    
+    roles = []
+    role_parts = role_str.split(',')
+    
+    for part in role_parts:
+        part = part.strip()
+        if not part:
+            continue
+            
+        # Try role mention first
+        if part.startswith('<@&') and part.endswith('>'):
+            role_id = part[3:-1]
+            role = guild.get_role(int(role_id))
+            if role:
+                roles.append(role)
+        else:
+            # Try role name
+            role = discord.utils.get(guild.roles, name=part)
+            if role:
+                roles.append(role)
+    
+    return roles
+
+@commands.group(name='giveaway', aliases=['ga'], invoke_without_command=True)
 @commands.has_permissions(manage_guild=True)
-async def create_giveaway(ctx: commands.Context, duration_minutes: int, winners: int, *, prize: str):
-    """Create a giveaway (Admin only)"""
+async def giveaway_group(ctx: commands.Context):
+    """Advanced giveaway system - Use subcommands for specific actions"""
+    embed = discord.Embed(
+        title="🎉 Advanced Giveaway System",
+        description="Use the following subcommands to manage giveaways:",
+        color=int(config.colors['primary'].replace('#', ''), 16)
+    )
+    
+    embed.add_field(
+        name="📝 Create Giveaway",
+        value="`w.giveaway create <prize> <duration> [options]`\n"
+              "Create a new giveaway with advanced options",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="⏹️ End Giveaway",
+        value="`w.giveaway end <giveaway_id>`\n"
+              "Manually end an active giveaway",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="🎲 Reroll Winners",
+        value="`w.giveaway reroll <giveaway_id> [new_winner_count]`\n"
+              "Reroll winners for a completed giveaway",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="📋 List Giveaways",
+        value="`w.giveaway list [all]`\n"
+              "List active (or all) giveaways in this server",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="🔧 Advanced Options",
+        value="**--channel** `#channel` - Set channel\n"
+              "**--winners** `number` - Number of winners (default: 1)\n"
+              "**--required-roles** `@role1,@role2` - Required roles\n"
+              "**--forbidden-roles** `@role1,@role2` - Forbidden roles\n"
+              "**--winner-role** `@role` - Role given to winners\n"
+              "**--min-messages** `number` - Minimum messages required\n"
+              "**--min-age** `days` - Minimum account age in days\n"
+              "**--bypass-roles** `@role1,@role2` - Roles that bypass requirements",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="⏰ Duration Format",
+        value="`1m` = 1 minute | `1h` = 1 hour | `1d` = 1 day | `1w` = 1 week",
+        inline=False
+    )
+    
+    await ctx.send(embed=embed)
+
+@giveaway_group.command(name='create', aliases=['c'])
+@commands.has_permissions(manage_guild=True)
+async def giveaway_create(ctx: commands.Context, prize: str, duration: str, *args):
+    """Create an advanced giveaway with comprehensive options
+    
+    Examples:
+    w.giveaway create "Discord Nitro" 1d --winners 2 --channel #giveaways
+    w.giveaway create "Steam Game" 12h --required-roles @Members --min-age 7
+    w.giveaway create "Special Prize" 3d --winner-role @Winner --bypass-roles @VIP
+    """
+    
+    # Parse arguments
+    channel = ctx.channel
+    winners = 1
+    required_roles = []
+    forbidden_roles = []
+    winner_role = None
+    min_messages = 0
+    min_account_age = 0
+    bypass_roles = []
+    description = None
+    
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        
+        if arg == '--channel' and i + 1 < len(args):
+            try:
+                channel_id = args[i + 1].replace('<#', '').replace('>', '')
+                channel = ctx.guild.get_channel(int(channel_id))
+                if not channel:
+                    raise ValueError("Channel not found")
+            except:
+                return await ctx.send("❌ Invalid channel specified!")
+            i += 2
+        
+        elif arg == '--winners' and i + 1 < len(args):
+            try:
+                winners = int(args[i + 1])
+                if winners < 1:
+                    raise ValueError("Winners must be at least 1")
+            except:
+                return await ctx.send("❌ Invalid number of winners specified!")
+            i += 2
+        
+        elif arg == '--required-roles' and i + 1 < len(args):
+            required_roles = parse_role_mentions(args[i + 1], ctx.guild)
+            i += 2
+        
+        elif arg == '--forbidden-roles' and i + 1 < len(args):
+            forbidden_roles = parse_role_mentions(args[i + 1], ctx.guild)
+            i += 2
+        
+        elif arg == '--winner-role' and i + 1 < len(args):
+            try:
+                role_str = args[i + 1].replace('<@&', '').replace('>', '')
+                winner_role = ctx.guild.get_role(int(role_str))
+                if not winner_role:
+                    winner_role = discord.utils.get(ctx.guild.roles, name=args[i + 1])
+            except:
+                return await ctx.send("❌ Invalid winner role specified!")
+            i += 2
+        
+        elif arg == '--min-messages' and i + 1 < len(args):
+            try:
+                min_messages = int(args[i + 1])
+                if min_messages < 0:
+                    raise ValueError("Min messages cannot be negative")
+            except:
+                return await ctx.send("❌ Invalid minimum messages specified!")
+            i += 2
+        
+        elif arg == '--min-age' and i + 1 < len(args):
+            try:
+                min_account_age = int(args[i + 1])
+                if min_account_age < 0:
+                    raise ValueError("Min age cannot be negative")
+            except:
+                return await ctx.send("❌ Invalid minimum account age specified!")
+            i += 2
+        
+        elif arg == '--bypass-roles' and i + 1 < len(args):
+            bypass_roles = parse_role_mentions(args[i + 1], ctx.guild)
+            i += 2
+        
+        elif arg == '--description' and i + 1 < len(args):
+            description = args[i + 1]
+            i += 2
+        
+        else:
+            i += 1
+    
+    # Create the giveaway
     result = await ctx.bot.giveaway_system.create_giveaway(
-        str(ctx.author.id), str(ctx.guild.id), str(ctx.channel.id),
-        "Server Giveaway", f"Prize: {prize}", prize, duration_minutes, winners
+        ctx=ctx,
+        prize=prize,
+        duration=duration,
+        winners=winners,
+        channel=channel,
+        required_roles=required_roles,
+        forbidden_roles=forbidden_roles,
+        winner_role=winner_role,
+        min_messages=min_messages,
+        min_account_age=min_account_age,
+        bypass_roles=bypass_roles,
+        description=description
+    )
+    
+    # Send result
+    embed = discord.Embed(
+        title="🎉 Giveaway Creation",
+        description=result['message'],
+        color=int(config.colors['success' if result['success'] else 'error'].replace('#', ''), 16)
+    )
+    
+    await ctx.send(embed=embed)
+
+@giveaway_group.command(name='end', aliases=['stop'])
+@commands.has_permissions(manage_guild=True)
+async def giveaway_end(ctx: commands.Context, giveaway_id: int):
+    """Manually end an active giveaway
+    
+    Example: w.giveaway end 123
+    """
+    
+    result = await ctx.bot.giveaway_system.end_giveaway(giveaway_id, str(ctx.author.id))
+    
+    embed = discord.Embed(
+        title="⏹️ End Giveaway",
+        description=result['message'],
+        color=int(config.colors['success' if result['success'] else 'error'].replace('#', ''), 16)
+    )
+    
+    await ctx.send(embed=embed)
+
+@giveaway_group.command(name='reroll', aliases=['r'])
+@commands.has_permissions(manage_guild=True)
+async def giveaway_reroll(ctx: commands.Context, giveaway_id: int, new_winner_count: Optional[int] = None):
+    """Reroll winners for a completed giveaway
+    
+    Examples:
+    w.giveaway reroll 123 - Reroll with same number of winners
+    w.giveaway reroll 123 3 - Reroll with 3 new winners
+    """
+    
+    result = await ctx.bot.giveaway_system.reroll_giveaway(
+        giveaway_id, str(ctx.author.id), new_winner_count
     )
     
     embed = discord.Embed(
-        title="🎉 Giveaway Creation",
+        title="🎲 Reroll Giveaway",
+        description=result['message'],
+        color=int(config.colors['success' if result['success'] else 'error'].replace('#', ''), 16)
+    )
+    
+    await ctx.send(embed=embed)
+
+@giveaway_group.command(name='list', aliases=['l'])
+@commands.has_permissions(manage_guild=True)
+async def giveaway_list(ctx: commands.Context, show_all: Optional[str] = None):
+    """List giveaways in this server
+    
+    Examples:
+    w.giveaway list - Show active giveaways
+    w.giveaway list all - Show all giveaways
+    """
+    
+    show_all_bool = show_all and show_all.lower() == 'all'
+    result = await ctx.bot.giveaway_system.list_giveaways(str(ctx.guild.id), show_all_bool)
+    
+    if result['success']:
+        await ctx.send(embed=result['embed'])
+    else:
+        embed = discord.Embed(
+            title="📋 Giveaway List",
+            description=result['message'],
+            color=int(config.colors['error'].replace('#', ''), 16)
+        )
+        await ctx.send(embed=embed)
+
+# Quick giveaway command for simple giveaways
+@commands.command(name='quickgiveaway', aliases=['qga'])
+@commands.has_permissions(manage_guild=True)
+async def quick_giveaway(ctx: commands.Context, duration: str, winners: int, *, prize: str):
+    """Create a simple giveaway quickly
+    
+    Example: w.quickgiveaway 1h 1 Discord Nitro
+    """
+    
+    result = await ctx.bot.giveaway_system.create_giveaway(
+        ctx=ctx,
+        prize=prize,
+        duration=duration,
+        winners=winners
+    )
+    
+    embed = discord.Embed(
+        title="🎉 Quick Giveaway Created",
         description=result['message'],
         color=int(config.colors['success' if result['success'] else 'error'].replace('#', ''), 16)
     )
@@ -562,8 +838,18 @@ async def help_command(ctx: commands.Context):
     )
     
     embed.add_field(
-        name="🎉 Admin Commands",
-        value="`w.giveaway` - Create giveaway\n"
+        name="🎉 Giveaway Commands",
+        value="`w.giveaway` - Advanced giveaway system\n"
+              "`w.giveaway create` - Create giveaway\n"
+              "`w.giveaway list` - List giveaways\n"
+              "`w.quickgiveaway` - Quick giveaway",
+        inline=True
+    )
+    
+    embed.add_field(
+        name="🛡️ Admin Commands",
+        value="`w.giveaway end` - End giveaway\n"
+              "`w.giveaway reroll` - Reroll winners\n"
               "`w.adddrops` - Add drop channel\n"
               "`w.forcedrop` - Force coin drop",
         inline=True
@@ -618,7 +904,8 @@ async def main():
     bot.add_command(rank)
     
     # Admin commands
-    bot.add_command(create_giveaway)
+    bot.add_command(giveaway_group)
+    bot.add_command(quick_giveaway)
     bot.add_command(add_drop_channel)
     bot.add_command(remove_drop_channel)
     bot.add_command(force_drop)
