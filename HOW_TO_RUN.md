@@ -1,117 +1,306 @@
-# How to Run the Wonder Discord Bot
+# Manual Menjalankan Wonder Discord Bot (Python Application)
 
-## Prerequisites
+## Persyaratan Sistem
 
-1. **Python 3.8+** installed on your system
-2. **Discord Bot Token** from Discord Developer Portal
+1. **Python 3.8+** terinstall di sistem Anda
+2. **Discord Bot Token** dari Discord Developer Portal
+3. **Git** (opsional, untuk clone repository)
+4. **Internet connection** untuk install dependencies
 
-## Setup Instructions
+## Langkah-langkah Instalasi dan Menjalankan Aplikasi
 
-### 1. Install Dependencies
+### 1. Persiapan Environment
 
+#### Opsi A: Menggunakan Virtual Environment (Direkomendasikan)
 ```bash
+# Buat virtual environment
+python3 -m venv wonder-bot-env
+
+# Aktifkan virtual environment
+# Linux/Mac:
+source wonder-bot-env/bin/activate
+# Windows:
+wonder-bot-env\Scripts\activate
+```
+
+#### Opsi B: Instalasi Global (Tidak direkomendasikan untuk production)
+```bash
+# Langsung install tanpa virtual environment
+# Gunakan flag --break-system-packages jika diperlukan
 pip install --break-system-packages -r requirements.txt
 ```
 
-Or if you prefer using a virtual environment:
+### 2. Install Python Packages/Dependencies
 
+**Daftar Python Packages yang Diperlukan:**
+
+| Package | Versi Minimum | Fungsi |
+|---------|---------------|--------|
+| `discord.py` | ≥2.3.2 | Library utama untuk Discord bot |
+| `aiofiles` | ≥23.2.1 | Async file operations |
+| `aiosqlite` | ≥0.19.0 | Async SQLite database operations |
+| `Pillow` | ≥10.0.1 | Image processing untuk fitur bot |
+| `python-dotenv` | ≥1.0.0 | Load environment variables dari .env file |
+| `schedule` | ≥1.2.0 | Scheduling tasks |
+| `colorama` | ≥0.4.6 | Colored terminal output |
+| `typing-extensions` | ≥4.8.0 | Extended typing support |
+| `PyNaCl` | ≥1.5.0 | Voice support untuk Discord |
+
+**Cara Install Dependencies:**
 ```bash
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+# Install semua dependencies sekaligus
 pip install -r requirements.txt
+
+# Atau install satu per satu jika ada masalah
+pip install discord.py>=2.3.2
+pip install aiofiles>=23.2.1
+pip install aiosqlite>=0.19.0
+pip install Pillow>=10.0.1
+pip install python-dotenv>=1.0.0
+pip install schedule>=1.2.0
+pip install colorama>=0.4.6
+pip install typing-extensions>=4.8.0
+pip install PyNaCl>=1.5.0
 ```
 
-### 2. Configure Environment Variables
+### 3. Konfigurasi Environment Variables
 
-1. Copy the `.env` file template:
+1. **Buat file .env** (jika belum ada):
    ```bash
-   cp .env .env.local
+   cp .env.example .env  # atau buat file .env baru
    ```
 
-2. Edit `.env` and add your Discord bot token:
+2. **Edit file .env** dan tambahkan konfigurasi berikut:
    ```env
+   # WAJIB: Token Discord Bot
    DISCORD_TOKEN=your_actual_discord_bot_token_here
-   PREMIUM_ROLE_ID=your_premium_role_id_here  # Optional
-   BOOSTER_ROLE_ID=your_booster_role_id_here  # Optional
+
+   # OPSIONAL: Role IDs untuk fitur premium
+   PREMIUM_ROLE_ID=your_premium_role_id_here
+   BOOSTER_ROLE_ID=your_booster_role_id_here
+
+   # OPSIONAL: Database settings
+   DATABASE_PATH=wonder.db
+
+   # OPSIONAL: Logging level
+   LOG_LEVEL=INFO
    ```
 
-### 3. Get a Discord Bot Token
+### 4. Mendapatkan Discord Bot Token
 
-1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
-2. Create a new application
-3. Go to "Bot" section
-4. Create a bot and copy the token
-5. Enable necessary intents:
-   - Message Content Intent
-   - Server Members Intent
-   - Reaction Intent
+1. Kunjungi [Discord Developer Portal](https://discord.com/developers/applications)
+2. Klik "New Application" dan beri nama bot Anda
+3. Navigasi ke tab "Bot" di sidebar
+4. Klik "Add Bot" untuk membuat bot
+5. Copy token dari bagian "Token" (jangan share token ini!)
+6. **PENTING**: Aktifkan intents berikut di bagian "Privileged Gateway Intents":
+   - ✅ Message Content Intent
+   - ✅ Server Members Intent
+   - ✅ Presence Intent (opsional)
 
-### 4. Run the Bot
+### 5. Menjalankan Aplikasi Python
 
+#### Metode 1: Menggunakan Script Python Langsung (Direkomendasikan)
 ```bash
+# Pastikan Anda berada di directory project
+cd /path/to/wonder-discord-bot
+
+# Jalankan aplikasi
 python3 run.py
 ```
 
-## Deployment to Hosting Services
-
-### Option 1: Using start.sh Script (Recommended)
+#### Metode 2: Menggunakan Start Script
 ```bash
+# Berikan permission execute pada script
 chmod +x start.sh
+
+# Jalankan script
 ./start.sh
 ```
 
-### Option 2: Direct Python Command
+#### Metode 3: Untuk Development dengan Auto-reload
 ```bash
-python3 run.py
+# Install nodemon atau equivalent untuk Python
+pip install watchdog
+
+# Jalankan dengan auto-reload (buat script terpisah jika perlu)
+python3 -m watchdog --patterns="*.py" --ignore-patterns="*/__pycache__/*" run.py
 ```
 
-### Option 3: For Heroku/Railway/Similar Platforms
-Use the included `Procfile`:
+### 6. Verifikasi Bot Berjalan
+
+Jika berhasil, Anda akan melihat output seperti:
 ```
-worker: python3 run.py
+[INFO] Bot is starting...
+[INFO] Database initialized successfully
+[INFO] Bot logged in as: YourBotName#1234
+[INFO] Bot is ready and online!
 ```
 
-### Fixing Python Path Issues
-If you encounter errors like "can't open file '/usr/local/bin/python'":
+## Deployment ke Platform Hosting
 
-1. **Use the start.sh script** - it automatically detects the correct Python path
-2. **Check your hosting provider's Python path** - some use `/usr/bin/python3` instead of `/usr/local/bin/python`
-3. **Use environment variables** in your hosting dashboard to set the Python executable path
+### Heroku
+1. **Buat Procfile** (sudah tersedia):
+   ```
+   worker: python3 run.py
+   ```
 
-### Environment Variables for Hosting
-Make sure to set these in your hosting provider's dashboard:
-- `DISCORD_TOKEN` - Your Discord bot token
-- `PREMIUM_ROLE_ID` - Optional premium role ID
-- `BOOSTER_ROLE_ID` - Optional booster role ID
+2. **Set environment variables** di dashboard Heroku:
+   - `DISCORD_TOKEN`
+   - `PREMIUM_ROLE_ID` (opsional)
+   - `BOOSTER_ROLE_ID` (opsional)
 
-## Bot Features
+3. **Deploy**:
+   ```bash
+   git add .
+   git commit -m "Deploy Wonder Discord Bot"
+   git push heroku main
+   ```
 
-- **Economy System**: WonderCoins, daily rewards, work commands
+### Railway/Render/Digital Ocean
+1. Upload project ke platform
+2. Set environment variables di dashboard
+3. Gunakan command: `python3 run.py`
+
+### VPS/Dedicated Server
+1. **Install dependencies**:
+   ```bash
+   sudo apt update
+   sudo apt install python3 python3-pip python3-venv
+   ```
+
+2. **Setup project**:
+   ```bash
+   git clone <repository-url>
+   cd wonder-discord-bot
+   python3 -m venv venv
+   source venv/bin/activate
+   pip install -r requirements.txt
+   ```
+
+3. **Setup service** (systemd):
+   ```bash
+   sudo nano /etc/systemd/system/wonder-bot.service
+   ```
+   
+   Isi file service:
+   ```ini
+   [Unit]
+   Description=Wonder Discord Bot
+   After=network.target
+
+   [Service]
+   Type=simple
+   User=your-username
+   WorkingDirectory=/path/to/wonder-discord-bot
+   Environment=PATH=/path/to/wonder-discord-bot/venv/bin
+   ExecStart=/path/to/wonder-discord-bot/venv/bin/python run.py
+   Restart=always
+
+   [Install]
+   WantedBy=multi-user.target
+   ```
+
+4. **Enable dan start service**:
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl enable wonder-bot
+   sudo systemctl start wonder-bot
+   ```
+
+## Fitur Bot
+
+- **Sistem Ekonomi**: WonderCoins, daily rewards, work commands
 - **Games**: Coinflip, dice, slots
-- **Shop System**: Buy items and manage inventory
-- **Leveling System**: XP and level tracking
-- **Giveaway System**: Create and manage giveaways
-- **Auto WonderCoins Drops**: Random coin drops in channels
+- **Sistem Shop**: Buy items dan manage inventory
+- **Leveling System**: XP dan level tracking
+- **Giveaway System**: Create dan manage giveaways
+- **Auto WonderCoins Drops**: Random coin drops di channels
 
-## Commands
+## Commands Utama
 
-The bot uses `w.` as the default prefix. Example commands:
+Bot menggunakan prefix `w.`. Contoh commands:
 
-- `w.balance` - Check your balance
-- `w.daily` - Claim daily coins
-- `w.work` - Work for coins
-- `w.coinflip <amount>` - Play coinflip
-- `w.shop` - View the shop
-- `w.rank` - Check your level
-- `w.help` - Get help
+| Command | Fungsi |
+|---------|--------|
+| `w.balance` | Cek balance WonderCoins |
+| `w.daily` | Claim daily coins |
+| `w.work` | Work untuk dapat coins |
+| `w.coinflip <amount>` | Main coinflip |
+| `w.shop` | Lihat shop |
+| `w.rank` | Cek level dan XP |
+| `w.help` | Get help commands |
+| `w.giveaway create` | Buat giveaway |
 
 ## Troubleshooting
 
-1. **"Improper token" error**: Make sure your Discord token is correct in the `.env` file
-2. **Import errors**: Ensure all dependencies are installed correctly
-3. **Permission errors**: Make sure the bot has necessary permissions in your Discord server
-4. **Python path errors**: Use the `start.sh` script or check your hosting provider's Python installation path
+### Error "Improper token"
+- ✅ Pastikan DISCORD_TOKEN di .env file benar
+- ✅ Token tidak boleh ada spasi atau quotes tambahan
+- ✅ Token harus dari bot yang sudah dibuat di Discord Developer Portal
 
-## Database
+### Import Errors
+- ✅ Pastikan semua dependencies terinstall: `pip list`
+- ✅ Cek virtual environment aktif: `which python`
+- ✅ Reinstall dependencies: `pip install -r requirements.txt --force-reinstall`
 
-The bot uses SQLite database (`wonder.db`) which is created automatically on first run.
+### Permission Errors di Discord
+- ✅ Bot harus di-invite ke server dengan permissions yang cukup
+- ✅ Role bot harus di atas role yang ingin dikelola
+- ✅ Channel permissions harus allow bot untuk read/send messages
+
+### Database Errors
+- ✅ Pastikan file `wonder.db` dapat ditulis
+- ✅ Cek permissions directory: `ls -la wonder.db`
+- ✅ Hapus database lama jika corrupt: `rm wonder.db` (data akan hilang)
+
+### Python Path Errors
+- ✅ Gunakan `start.sh` script yang auto-detect Python path
+- ✅ Cek Python installation: `which python3`
+- ✅ Update system Python jika versi terlalu lama
+
+## Monitoring dan Logs
+
+### Melihat Logs Real-time
+```bash
+# Jika run manual
+python3 run.py
+
+# Jika pakai systemd service
+sudo journalctl -u wonder-bot -f
+
+# Jika pakai screen/tmux
+screen -r wonder-bot
+```
+
+### Log Files
+- Bot logs tersimpan di: `bot.log`
+- Database: `wonder.db`
+- Config: `config.json`
+
+## Update dan Maintenance
+
+### Update Bot
+```bash
+# Backup database
+cp wonder.db wonder.db.backup
+
+# Pull updates
+git pull origin main
+
+# Update dependencies
+pip install -r requirements.txt --upgrade
+
+# Restart bot
+# Manual: Ctrl+C dan jalankan lagi python3 run.py
+# Service: sudo systemctl restart wonder-bot
+```
+
+### Backup Data
+```bash
+# Backup database
+cp wonder.db backups/wonder.db.$(date +%Y%m%d_%H%M%S)
+
+# Backup config
+cp config.json backups/config.json.$(date +%Y%m%d_%H%M%S)
+```
