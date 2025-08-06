@@ -1,0 +1,161 @@
+{
+  "prefix": "w.",
+  "currency": {
+    "name": "WonderCoins",
+    "symbol": "💰",
+    "dailyAmount": 100,
+    "workAmount": 50
+  },
+  "branding": {
+    "name": "Luxury Kingdom Bot",
+    "tagline": "Royal Elegance Awaits",
+    "version": "2.0.0",
+    "theme": "Luxury Kingdom Aesthetic"
+  },
+  "booster": {
+    "dailyBonus": 50,
+    "workBonus": 25,
+    "exclusiveChannels": true
+  },
+  "premium": {
+    "dailyBonus": 100,
+    "workBonus": 50,
+    "exclusiveChannels": true,
+    "customColor": true
+  },
+  "games": {
+    "coinflip": {
+      "minBet": 10,
+      "maxBet": 1000
+    },
+    "dice": {
+      "minBet": 10,
+      "maxBet": 500
+    },
+    "slots": {
+      "minBet": 20,
+      "maxBet": 200
+    }
+  },
+  "colors": {
+    "primary": "#FFD700",
+    "secondary": "#DAA520", 
+    "accent": "#8B4513",
+    "success": "#228B22",
+    "error": "#DC143C",
+    "warning": "#FF8C00",
+    "info": "#4169E1",
+    "royal": "#800080",
+    "luxury": "#FF69B4",
+    "kingdom": "#FFD700",
+    "background": "#2F1B69",
+    "text": "#F5F5DC"
+  },
+  "theme": {
+    "name": "Luxury Kingdom",
+    "style": "royal-luxury",
+    "emojis": {
+      "crown": "👑",
+      "gem": "💎",
+      "star": "⭐",
+      "castle": "🏰",
+      "kingdom": "🏛️",
+      "royal": "🎭",
+      "diamond": "💍",
+      "magic": "✨",
+      "throne": "🪑",
+      "scepter": "🔱",
+      "treasure": "💰",
+      "medal": "🏅",
+      "ribbon": "🎀",
+      "pearl": "🦪"
+    },
+    "prefixes": {
+      "royal": "『ROYAL』",
+      "luxury": "『LUXURY』", 
+      "kingdom": "『KINGDOM』",
+      "legend": "『LEGEND』",
+      "elite": "『NOBLE』",
+      "majestic": "『MAJESTIC』"
+    }
+  },
+  "cooldowns": {
+    "daily": 1440,
+    "work": 60,
+    "coinflip": 2,
+    "dice": 3,
+    "slots": 5,
+    "mystery_box": 30,
+    "use_item": 1
+  },
+  "shop": {
+    "categories": ["consumables", "collectibles", "profile", "special"],
+    "dailyFeatured": true,
+    "discounts": {
+      "booster": 0.1,
+      "premium": 0.15
+    }
+  },
+  "giveaways": {
+    "maxDuration": 10080,
+    "maxWinners": 10,
+    "winnerCooldown": 10080,
+    "odds": {
+      "regular": 1.0,
+      "booster": 2.0,
+      "premium": 3.0
+    },
+    "restrictions": {
+      "premiumBypass": true,
+      "accountAgeMin": 7
+    }
+  },
+  "leveling": {
+    "enabled": true,
+    "maxLevel": 50,
+    "xp": {
+      "text": {
+        "base": 15,
+        "bonus": 5,
+        "cooldown": 60000,
+        "maxPerMessage": 25,
+        "multipliers": {
+          "booster": 1.5,
+          "premium": 1.75
+        }
+      },
+      "voice": {
+        "base": 10,
+        "bonus": 5,
+        "minDuration": 60000,
+        "requiresUnmuted": true,
+        "multipliers": {
+          "booster": 1.5,
+          "premium": 1.75
+        }
+      },
+      "role": {
+        "dailyLogin": 50,
+        "messageStreak": 25,
+        "voiceStreak": 30,
+        "helpingOthers": 100,
+        "eventParticipation": 200,
+        "multipliers": {
+          "booster": 1.25,
+          "premium": 1.5
+        }
+      }
+    },
+    "rewards": {
+      "announceInChannel": true,
+      "dmUser": false,
+      "currencyRewards": true,
+      "roleRewards": true,
+      "titleRewards": true
+    },
+    "leaderboard": {
+      "maxDisplayed": 15,
+      "updateInterval": 300000
+    }
+  }
+}
