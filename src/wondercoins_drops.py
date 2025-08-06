@@ -10,47 +10,54 @@ from database import database
 from config import config
 
 class WonderCoinsDropSystem:
-    """Manages automatic WonderCoins drops in configured channels"""
+    """Manages automatic WonderCoins drops in configured channels with advanced admin features"""
     
     def __init__(self, client):
         self.client = client
         self.drop_channels = {}
+        self.channel_settings = {}  # Advanced channel-specific settings
         self.active_drops = {}
+        
+        # Enhanced rarity configuration
         self.rarity_config = {
             'common': {
-                'chance': 84,
+                'chance': 70,
                 'multiplier': 1.0,
                 'emoji': '⚪',
-                'base_amount': 150
+                'base_amount': 150,
+                'color': 0x87CEEB
             },
             'rare': {
-                'chance': 10,
-                'multiplier': 3.0,
+                'chance': 20,
+                'multiplier': 2.5,
                 'emoji': '🔵',
-                'base_amount': 150
+                'base_amount': 150,
+                'color': 0x9BADBE
             },
             'epic': {
-                'chance': 5,
-                'multiplier': 5.0,
+                'chance': 8,
+                'multiplier': 4.0,
                 'emoji': '🟣',
-                'base_amount': 150
+                'base_amount': 150,
+                'color': 0xA89CC8
             },
             'legendary': {
-                'chance': 1,
-                'multiplier': 10.0,
+                'chance': 2,
+                'multiplier': 8.0,
                 'emoji': '🟡',
-                'base_amount': 150
+                'base_amount': 150,
+                'color': 0xD8B4DA
             }
         }
         
-        # Collection mechanics
+        # Enhanced collection mechanics
         self.collection_types = [
             {
                 'name': 'standard',
                 'emoji': '💰',
                 'description': 'Standard collection',
                 'multiplier': 1.0,
-                'chance': 60
+                'chance': 50
             },
             {
                 'name': 'quick_grab',
@@ -63,11 +70,19 @@ class WonderCoinsDropSystem:
             {
                 'name': 'lucky_grab',
                 'emoji': '🍀',
-                'description': 'Lucky grab - 30% chance for 1.5x bonus!',
-                'multiplier': 1.0,  # Base, bonus applied randomly
+                'description': 'Lucky grab - 40% chance for 1.8x bonus!',
+                'multiplier': 1.0,
                 'chance': 15,
-                'lucky_chance': 0.3,
-                'lucky_multiplier': 1.5
+                'lucky_chance': 0.4,
+                'lucky_multiplier': 1.8
+            },
+            {
+                'name': 'wonder_grab',
+                'emoji': '✨',
+                'description': 'Wonder grab - Mystical bonus effects!',
+                'multiplier': 1.5,
+                'chance': 10,
+                'special_effects': True
             }
         ]
         
@@ -75,7 +90,7 @@ class WonderCoinsDropSystem:
         self.start_drop_system.start()
     
     async def initialize_drop_channels(self):
-        """Load drop channels from database"""
+        """Load drop channels and their settings from database"""
         try:
             async with database.db_path as db_path:
                 import aiosqlite
@@ -93,11 +108,21 @@ class WonderCoinsDropSystem:
                 
                 self.drop_channels[guild_id].append(channel_id)
                 
+                # Load advanced settings if available
+                self.channel_settings[f"{guild_id}_{channel_id}"] = {
+                    'custom_rarity_multiplier': 1.0,
+                    'custom_amount_multiplier': 1.0,
+                    'allowed_rarities': ['common', 'rare', 'epic', 'legendary'],
+                    'drop_frequency_modifier': 1.0,
+                    'special_events': False
+                }
+                
         except Exception as e:
             logging.error(f"Error initializing drop channels: {e}")
     
-    async def add_drop_channel(self, guild_id: str, channel_id: str, created_by: str) -> Dict[str, Any]:
-        """Add a channel to the drop system"""
+    async def add_drop_channel_advanced(self, guild_id: str, channel_id: str, created_by: str, 
+                                      settings: Dict[str, Any] = None) -> Dict[str, Any]:
+        """Add a channel with advanced configuration options"""
         try:
             # Check if channel already exists
             async with database.db_path as db_path:
@@ -112,13 +137,14 @@ class WonderCoinsDropSystem:
             if existing:
                 return {"success": False, "message": "Channel is already configured for drops!"}
             
-            # Add to database
+            # Add to database with settings
+            settings_json = str(settings) if settings else "{}"
             async with database.db_path as db_path:
                 import aiosqlite
                 async with aiosqlite.connect(db_path) as db:
                     await db.execute(
-                        'INSERT INTO drop_channels (guild_id, channel_id, created_by) VALUES (?, ?, ?)',
-                        (guild_id, channel_id, created_by)
+                        'INSERT INTO drop_channels (guild_id, channel_id, created_by, settings) VALUES (?, ?, ?, ?)',
+                        (guild_id, channel_id, created_by, settings_json)
                     )
                     await db.commit()
             
@@ -127,12 +153,63 @@ class WonderCoinsDropSystem:
                 self.drop_channels[guild_id] = []
             self.drop_channels[guild_id].append(channel_id)
             
-            return {"success": True, "message": "Channel added to drop system!"}
+            # Apply advanced settings
+            default_settings = {
+                'custom_rarity_multiplier': 1.0,
+                'custom_amount_multiplier': 1.0,
+                'allowed_rarities': ['common', 'rare', 'epic', 'legendary'],
+                'drop_frequency_modifier': 1.0,
+                'special_events': False
+            }
+            
+            if settings:
+                default_settings.update(settings)
+            
+            self.channel_settings[f"{guild_id}_{channel_id}"] = default_settings
+            
+            return {"success": True, "message": "Channel added to drop system with advanced settings!"}
             
         except Exception as e:
             logging.error(f"Error adding drop channel: {e}")
             return {"success": False, "message": "An error occurred while adding the channel."}
     
+    async def configure_channel_drops(self, guild_id: str, channel_id: str, 
+                                    settings: Dict[str, Any]) -> Dict[str, Any]:
+        """Configure advanced drop settings for a specific channel"""
+        try:
+            channel_key = f"{guild_id}_{channel_id}"
+            
+            # Verify channel exists in drop system
+            if guild_id not in self.drop_channels or channel_id not in self.drop_channels[guild_id]:
+                return {"success": False, "message": "Channel is not configured for drops!"}
+            
+            # Update settings
+            if channel_key not in self.channel_settings:
+                self.channel_settings[channel_key] = {}
+            
+            self.channel_settings[channel_key].update(settings)
+            
+            # Save to database
+            settings_json = str(self.channel_settings[channel_key])
+            async with database.db_path as db_path:
+                import aiosqlite
+                async with aiosqlite.connect(db_path) as db:
+                    await db.execute(
+                        'UPDATE drop_channels SET settings = ? WHERE guild_id = ? AND channel_id = ?',
+                        (settings_json, guild_id, channel_id)
+                    )
+                    await db.commit()
+            
+            return {"success": True, "message": "Channel drop settings updated successfully!"}
+            
+        except Exception as e:
+            logging.error(f"Error configuring channel drops: {e}")
+            return {"success": False, "message": "An error occurred while updating settings."}
+    
+    async def add_drop_channel(self, guild_id: str, channel_id: str, created_by: str) -> Dict[str, Any]:
+        """Legacy method - calls advanced version with default settings"""
+        return await self.add_drop_channel_advanced(guild_id, channel_id, created_by)
+
     async def remove_drop_channel(self, guild_id: str, channel_id: str) -> Dict[str, Any]:
         """Remove a channel from the drop system"""
         try:
@@ -153,18 +230,79 @@ class WonderCoinsDropSystem:
             if guild_id in self.drop_channels and channel_id in self.drop_channels[guild_id]:
                 self.drop_channels[guild_id].remove(channel_id)
             
+            # Remove settings
+            channel_key = f"{guild_id}_{channel_id}"
+            if channel_key in self.channel_settings:
+                del self.channel_settings[channel_key]
+            
             return {"success": True, "message": "Channel removed from drop system!"}
             
         except Exception as e:
             logging.error(f"Error removing drop channel: {e}")
             return {"success": False, "message": "An error occurred while removing the channel."}
     
-    @tasks.loop(minutes=30)  # Check every 30 minutes
-    async def start_drop_system(self):
-        """Main drop system loop"""
+    async def force_drop_in_channel(self, guild_id: str, channel_id: str, 
+                                  amount: int = None, rarity: str = None) -> Dict[str, Any]:
+        """Force a drop in a specific channel (admin feature)"""
         try:
-            # Random timing between 30 minutes to 3 hours
-            wait_minutes = random.randint(30, 180)
+            guild = self.client.get_guild(int(guild_id))
+            channel = guild.get_channel(int(channel_id))
+            
+            if not channel:
+                return {"success": False, "message": "Channel not found!"}
+            
+            # Override rarity if specified
+            if rarity and rarity not in self.rarity_config:
+                return {"success": False, "message": "Invalid rarity specified!"}
+            
+            # Create the drop
+            await self.create_drop(guild_id, channel_id, forced_amount=amount, forced_rarity=rarity)
+            
+            return {"success": True, "message": f"Forced drop created in {channel.name}!"}
+            
+        except Exception as e:
+            logging.error(f"Error forcing drop: {e}")
+            return {"success": False, "message": "An error occurred while creating the drop."}
+    
+    async def get_channel_list(self, guild_id: str) -> List[Dict[str, Any]]:
+        """Get list of configured drop channels for a guild"""
+        try:
+            guild = self.client.get_guild(int(guild_id))
+            if not guild:
+                return []
+            
+            channels = []
+            if guild_id in self.drop_channels:
+                for channel_id in self.drop_channels[guild_id]:
+                    channel = guild.get_channel(int(channel_id))
+                    if channel:
+                        channel_key = f"{guild_id}_{channel_id}"
+                        settings = self.channel_settings.get(channel_key, {})
+                        
+                        channels.append({
+                            'id': channel_id,
+                            'name': channel.name,
+                            'mention': f'<#{channel_id}>',
+                            'settings': settings
+                        })
+            
+            return channels
+            
+        except Exception as e:
+            logging.error(f"Error getting channel list: {e}")
+            return []
+    
+    @tasks.loop(minutes=20)  # Check every 20 minutes (faster than before)
+    async def start_drop_system(self):
+        """Enhanced drop system loop with dynamic timing"""
+        try:
+            # Random timing between 20 minutes to 2 hours
+            base_wait = random.randint(20, 120)
+            
+            # Apply global modifiers based on server activity
+            # Could be enhanced to check user activity levels
+            wait_minutes = base_wait
+            
             await asyncio.sleep(wait_minutes * 60)
             
             # Select random guild and channel for drop
@@ -174,7 +312,7 @@ class WonderCoinsDropSystem:
             logging.error(f"Error in drop system: {e}")
     
     async def create_random_drop(self):
-        """Create a random drop in a configured channel"""
+        """Create a random drop in a configured channel with advanced features"""
         try:
             if not self.drop_channels:
                 await self.initialize_drop_channels()
@@ -189,22 +327,35 @@ class WonderCoinsDropSystem:
             if not guild:
                 return
             
-            # Select random channel from guild
+            # Select random channel from guild with frequency modifiers
             channel_ids = self.drop_channels[guild_id]
-            channel_id = random.choice(channel_ids)
+            
+            # Apply frequency modifiers
+            weighted_channels = []
+            for channel_id in channel_ids:
+                channel_key = f"{guild_id}_{channel_id}"
+                settings = self.channel_settings.get(channel_key, {})
+                modifier = settings.get('drop_frequency_modifier', 1.0)
+                
+                # Add channel multiple times based on frequency modifier
+                weight = max(1, int(modifier * 10))
+                weighted_channels.extend([channel_id] * weight)
+            
+            channel_id = random.choice(weighted_channels) if weighted_channels else random.choice(channel_ids)
             channel = guild.get_channel(int(channel_id))
             
             if not channel:
                 return
             
-            # Generate drop
+            # Generate drop with channel-specific settings
             await self.create_drop(guild_id, channel_id)
             
         except Exception as e:
             logging.error(f"Error creating random drop: {e}")
     
-    async def create_drop(self, guild_id: str, channel_id: str):
-        """Create a WonderCoins drop in a specific channel"""
+    async def create_drop(self, guild_id: str, channel_id: str, 
+                        forced_amount: int = None, forced_rarity: str = None):
+        """Create a WonderCoins drop in a specific channel with advanced features"""
         try:
             guild = self.client.get_guild(int(guild_id))
             channel = guild.get_channel(int(channel_id))
@@ -212,24 +363,39 @@ class WonderCoinsDropSystem:
             if not channel:
                 return
             
-            # Determine rarity
-            rarity = self._determine_rarity()
+            # Get channel-specific settings
+            channel_key = f"{guild_id}_{channel_id}"
+            settings = self.channel_settings.get(channel_key, {})
+            
+            # Determine rarity with channel restrictions
+            if forced_rarity:
+                rarity = forced_rarity
+            else:
+                allowed_rarities = settings.get('allowed_rarities', ['common', 'rare', 'epic', 'legendary'])
+                rarity = self._determine_rarity(allowed_rarities, settings.get('custom_rarity_multiplier', 1.0))
+            
             rarity_config = self.rarity_config[rarity]
             
             # Determine collection type
             collection_type = self._determine_collection_type()
             
-            # Calculate drop amount
-            base_amount = rarity_config['base_amount']
-            rarity_multiplier = rarity_config['multiplier']
-            amount = int(base_amount * rarity_multiplier)
+            # Calculate drop amount with channel modifiers
+            if forced_amount:
+                amount = forced_amount
+            else:
+                base_amount = rarity_config['base_amount']
+                rarity_multiplier = rarity_config['multiplier']
+                channel_multiplier = settings.get('custom_amount_multiplier', 1.0)
+                
+                amount = int(base_amount * rarity_multiplier * channel_multiplier)
+                
+                # Add some randomness
+                variance = int(amount * 0.2)  # 20% variance
+                amount += random.randint(-variance, variance)
+                amount = max(50, amount)  # Minimum 50 coins
             
-            # Add some randomness
-            amount += random.randint(-25, 25)
-            amount = max(50, amount)  # Minimum 50 coins
-            
-            # Create drop embed
-            embed = self._create_drop_embed(amount, rarity, collection_type)
+            # Create enhanced drop embed
+            embed = self._create_enhanced_drop_embed(amount, rarity, collection_type, settings)
             
             # Send drop message
             message = await channel.send(embed=embed)
@@ -237,7 +403,7 @@ class WonderCoinsDropSystem:
             # Add reactions for collection
             await message.add_reaction(collection_type['emoji'])
             
-            # Store active drop
+            # Store active drop with enhanced data
             self.active_drops[str(message.id)] = {
                 'guild_id': guild_id,
                 'channel_id': channel_id,
@@ -245,24 +411,39 @@ class WonderCoinsDropSystem:
                 'rarity': rarity,
                 'collection_type': collection_type,
                 'collectors': [],
-                'created_at': datetime.now()
+                'created_at': datetime.now(),
+                'channel_settings': settings,
+                'forced': bool(forced_amount or forced_rarity)
             }
             
             # Log the drop
             await self._log_drop_creation(guild_id, amount, rarity, collection_type['name'])
             
-            # Set expiry timer (drops expire after 10 minutes)
-            asyncio.create_task(self._expire_drop(message.id, 600))  # 10 minutes
+            # Set expiry timer (drops expire after 12 minutes for better collection)
+            asyncio.create_task(self._expire_drop(message.id, 720))  # 12 minutes
             
         except Exception as e:
             logging.error(f"Error creating drop: {e}")
     
-    def _determine_rarity(self) -> str:
-        """Determine the rarity of a drop based on chances"""
-        rand = random.randint(1, 100)
+    def _determine_rarity(self, allowed_rarities: List[str] = None, multiplier: float = 1.0) -> str:
+        """Determine the rarity of a drop based on chances and restrictions"""
+        if not allowed_rarities:
+            allowed_rarities = ['common', 'rare', 'epic', 'legendary']
         
+        # Filter rarity config to only allowed rarities
+        available_rarities = {k: v for k, v in self.rarity_config.items() if k in allowed_rarities}
+        
+        # Apply multiplier to rare item chances
+        if multiplier != 1.0:
+            for rarity_name, config in available_rarities.items():
+                if rarity_name != 'common':
+                    config = config.copy()
+                    config['chance'] = min(50, config['chance'] * multiplier)  # Cap at 50%
+        
+        rand = random.randint(1, 100)
         cumulative_chance = 0
-        for rarity, config in self.rarity_config.items():
+        
+        for rarity, config in available_rarities.items():
             cumulative_chance += config['chance']
             if rand <= cumulative_chance:
                 return rarity
@@ -281,19 +462,23 @@ class WonderCoinsDropSystem:
         
         return self.collection_types[0]  # Fallback to standard
     
-    def _create_drop_embed(self, amount: int, rarity: str, collection_type: Dict[str, Any]) -> discord.Embed:
-        """Create embed for a WonderCoins drop"""
+    def _create_enhanced_drop_embed(self, amount: int, rarity: str, collection_type: Dict[str, Any], 
+                                  settings: Dict[str, Any]) -> discord.Embed:
+        """Create enhanced embed for a WonderCoins drop"""
         rarity_config = self.rarity_config[rarity]
         
+        # Use rarity-specific color
+        embed_color = rarity_config.get('color', int(config.colors['primary'].replace('#', ''), 16))
+        
         embed = discord.Embed(
-            title=f"💰 WonderCoins Drop!",
-            description=f"**{amount:,}** {config.currency['symbol']} have appeared!",
-            color=int(config.colors['primary'].replace('#', ''), 16)
+            title=f"✨ WonderCoins Drop!",
+            description=f"**{amount:,}** {config.currency['symbol']} have appeared in a mystical shimmer!",
+            color=embed_color
         )
         
         embed.add_field(
             name=f"{rarity_config['emoji']} Rarity",
-            value=rarity.title(),
+            value=f"**{rarity.title()}** ✨",
             inline=True
         )
         
@@ -303,13 +488,29 @@ class WonderCoinsDropSystem:
             inline=True
         )
         
+        # Add special effects info if applicable
+        if collection_type.get('special_effects'):
+            embed.add_field(
+                name="🌟 Special Effects",
+                value="Wonder energy enhances this drop!",
+                inline=True
+            )
+        
         embed.add_field(
-            name="📝 How to Collect",
-            value=f"React with {collection_type['emoji']} to collect!",
+            name="🔮 How to Collect",
+            value=f"React with {collection_type['emoji']} to collect these wonder coins!",
             inline=False
         )
         
-        embed.set_footer(text="Drop expires in 10 minutes")
+        # Add channel-specific info if enhanced
+        if settings.get('custom_amount_multiplier', 1.0) > 1.0:
+            embed.add_field(
+                name="💎 Channel Bonus",
+                value=f"This channel has enhanced drops! (+{int((settings['custom_amount_multiplier'] - 1) * 100)}%)",
+                inline=False
+            )
+        
+        embed.set_footer(text="Drop expires in 12 minutes • Wonderkind drops are magical!")
         embed.timestamp = datetime.now()
         
         return embed

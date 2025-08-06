@@ -12,7 +12,7 @@ cursor/tambahkan-fitur-leveling-roles-dan-level-d928
 
 ## 🎯 System Overview
 
-The Luxury Kingdom Bot features a comprehensive 4-category leveling system designed to reward user engagement across multiple activities. Each category has independent progression with unique rewards and benefits.
+The Wonderkind Bot features a comprehensive 4-category leveling system designed to reward user engagement across multiple activities. Each category has independent progression with unique rewards and benefits.
 
 ### Core Features
 - **4 Independent Categories**: Text, Voice, Role, Overall
@@ -488,16 +488,16 @@ class LevelCache {
 
 **This leveling system promotes sustained engagement while rewarding dedication and community participation across all aspects of Discord server life.**
 
-# 👑 Luxury Kingdom Leveling System
+# 🌌 Wonderkind Leveling System
 
-Welcome to the **Luxury Kingdom** - where royal elegance meets sophisticated progression! 
+Welcome to **Wonderkind** - where wonder meets chrome dreams! 
 
-The Luxury Kingdom Bot features a comprehensive multi-tiered leveling system that rewards user activity across different categories with a beautiful, minimalist yet user-friendly design that celebrates nobility and luxury.
+The Wonderkind Bot features a comprehensive multi-tiered leveling system that rewards user activity across different categories with a beautiful, minimalist yet user-friendly design that celebrates wonder and dreams.
 
-## 🏰 **Luxury Kingdom Aesthetic Features**
-- **Royal Color Palette:** Gold, purple, brown, and emerald
-- **Minimalist UI:** Clean, beautiful embeds with elegant emoji usage
-- **Noble Status System:** Court hierarchy and aristocratic progression
+## 🌌 **Wonderkind Aesthetic Features**
+- **Wonder Color Palette:** Chrome, dreamy pastels, soft purples, and gentle greens
+- **Minimalist UI:** Clean, beautiful embeds with mystical emoji usage
+- **Wonder Status System:** Dream hierarchy and mystical progression
 - **Progressive Visual Feedback:** Level badges, progress bars, and nobility indicators
 - **User-Friendly Experience:** Intuitive commands and clear information hierarchy
 

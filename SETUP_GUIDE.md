@@ -87,7 +87,7 @@ npm install -g windows-build-tools
 2. **Configure Application**
    - **General Information Tab**:
      - Copy "Application ID" (this is your CLIENT_ID)
-     - Add description: "Luxury Kingdom Discord Bot"
+     - Add description: "Wonderkind Discord Bot"
      - Upload app icon (optional)
 
 ### Step 2: Create Bot User
@@ -278,7 +278,7 @@ npm start
 npm run dev
 
 # Expected output:
-# ✅ Luxury Kingdom Bot is ready! Logged in as Wonder Bot#1234
+# ✅ Wonderkind Bot is ready! Logged in as Wonder Bot#1234
 # ✅ Loaded drop channels for 0 guilds
 # 🎯 Started global drop interval
 ```
@@ -300,7 +300,7 @@ npm run dev
 ### Step 1: Configure Welcome System
 ```bash
 # Set welcome channel
-/setup welcome channel:#welcome-channel message:Welcome to our luxury kingdom! 👑
+/setup welcome channel:#welcome-channel message:Welcome to our wonderkind! 🌌
 
 # Set introduction channel
 /setup introduction channel:#introductions
@@ -582,4 +582,4 @@ crontab -e
 
 ---
 
-**🎉 Congratulations! Your Wonder Discord Bot is now ready to transform your server into a luxury kingdom! 👑**
+**🎉 Congratulations! Your Wonder Discord Bot is now ready to transform your server into a wonderkind! 🌌**
