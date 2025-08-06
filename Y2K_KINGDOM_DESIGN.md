@@ -1,6 +1,5 @@
 # 🏰 Luxury Kingdom Design System
 
- cursor/tambahkan-fitur-leveling-roles-dan-level-d928
 ## 📋 Table of Contents
 - [Design Philosophy](#-design-philosophy)
 - [Visual Identity](#-visual-identity)
@@ -638,3 +637,4 @@ The Luxury Kingdom aesthetic embodies the grandeur and sophistication of royal c
 
 *"Welcome to the Luxury Kingdom - Where Royal Elegance Reigns Supreme"* 👑✨
  main
+
