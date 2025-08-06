@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3
 """
 Wonder Discord Bot - Python Version
 Run script for the bot
