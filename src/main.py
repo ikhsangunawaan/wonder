@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands, tasks
+from discord import app_commands
 import asyncio
 import os
 import logging
@@ -75,6 +76,13 @@ class WonderBot(commands.Bot):
         self.giveaway_system = init_giveaway_system(self)
         self.leveling_system = init_leveling_system(self)
         self.drop_system = init_wondercoins_drops(self)
+        
+        # Sync slash commands
+        try:
+            synced = await self.tree.sync()
+            logging.info(f"Synced {len(synced)} slash commands")
+        except Exception as e:
+            logging.error(f"Failed to sync slash commands: {e}")
         
         logging.info("All systems initialized")
         
@@ -182,29 +190,33 @@ class WonderBot(commands.Bot):
         if hasattr(self, 'leveling_system') and self.leveling_system:
             await self.leveling_system.handle_voice_update(member, before, after)
 
-# Economy Commands
-@commands.command(name='balance', aliases=['bal'])
-async def balance(ctx: commands.Context):
-    """Check your balance"""
-    user_data = await ctx.bot.database.get_user(str(ctx.author.id))
+# Economy Commands (Hybrid: both prefix and slash)
+@commands.hybrid_command(name='balance', aliases=['bal'])
+@app_commands.describe(user='User to check balance for (optional)')
+async def balance(ctx: commands.Context, user: discord.Member = None):
+    """Check your balance or another user's balance"""
+    target_user = user or ctx.author
+    
+    user_data = await ctx.bot.database.get_user(str(target_user.id))
     if not user_data:
-        await ctx.bot.database.create_user(str(ctx.author.id), ctx.author.name)
-        user_data = await ctx.bot.database.get_user(str(ctx.author.id))
+        await ctx.bot.database.create_user(str(target_user.id), target_user.name)
+        user_data = await ctx.bot.database.get_user(str(target_user.id))
     
     balance = user_data['balance'] if user_data else 0
     
     embed = discord.Embed(
-        title=f"{config.currency['symbol']} Balance",
-        description=f"**{ctx.author.mention}** has **{balance:,}** {config.currency['name']}",
+        title=f"✨ Wonder Balance",
+        description=f"**{target_user.mention}** has **{balance:,}** {config.currency['name']}",
         color=int(config.colors['primary'].replace('#', ''), 16)
     )
-    embed.set_thumbnail(url=ctx.author.display_avatar.url)
+    embed.set_thumbnail(url=target_user.display_avatar.url)
+    embed.set_footer(text="Wonderkind • Where Wonder Meets Chrome Dreams")
     
     await ctx.send(embed=embed)
 
-@commands.command(name='daily')
+@commands.hybrid_command(name='daily')
 async def daily(ctx: commands.Context):
-    """Claim your daily reward"""
+    """Claim your daily wonder reward"""
     from datetime import datetime, timedelta
     
     user_data = await ctx.bot.database.get_user(str(ctx.author.id))
@@ -222,32 +234,40 @@ async def daily(ctx: commands.Context):
             remaining = timedelta(hours=24) - (now - last_claim_dt)
             hours, remainder = divmod(remaining.seconds, 3600)
             minutes, _ = divmod(remainder, 60)
-            await ctx.send(f"❌ You can claim your daily reward in {hours}h {minutes}m")
+            
+            embed = discord.Embed(
+                title="🌙 Daily Reward Cooldown",
+                description=f"You can claim your daily reward in **{hours}h {minutes}m**",
+                color=int(config.colors['warning'].replace('#', ''), 16)
+            )
+            embed.set_footer(text="Wonderkind • Where Wonder Meets Chrome Dreams")
+            await ctx.send(embed=embed)
             return
     
     # Give daily reward
     daily_amount = config.currency['dailyAmount']
     
-    # Check for booster bonus (will be implemented when role system is converted)
-    # if ctx.author.premium_since:  # Boost bonus
-    #     daily_amount += config.booster['dailyBonus']
+    # Check for booster bonus
+    if ctx.author.premium_since:  # Boost bonus
+        daily_amount += config.booster['dailyBonus']
     
     await ctx.bot.database.update_balance(str(ctx.author.id), daily_amount)
     await ctx.bot.database.update_daily_claim(str(ctx.author.id))
     await ctx.bot.database.add_transaction(str(ctx.author.id), 'daily', daily_amount, 'Daily reward')
     
     embed = discord.Embed(
-        title=f"{config.currency['symbol']} Daily Reward",
+        title=f"✨ Daily Wonder Reward",
         description=f"You claimed **{daily_amount:,}** {config.currency['name']}!",
         color=int(config.colors['success'].replace('#', ''), 16)
     )
     embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.display_avatar.url)
+    embed.set_footer(text="Wonderkind • Where Wonder Meets Chrome Dreams")
     
     await ctx.send(embed=embed)
 
-@commands.command(name='work')
+@commands.hybrid_command(name='work')
 async def work(ctx: commands.Context):
-    """Work to earn coins"""
+    """Work in the wonder kingdom to earn coins"""
     from datetime import datetime, timedelta
     import random
     
@@ -265,17 +285,29 @@ async def work(ctx: commands.Context):
         if now - last_work_dt < timedelta(minutes=config.cooldowns['work']):
             remaining = timedelta(minutes=config.cooldowns['work']) - (now - last_work_dt)
             minutes, seconds = divmod(remaining.seconds, 60)
-            await ctx.send(f"❌ You can work again in {minutes}m {seconds}s")
+            
+            embed = discord.Embed(
+                title="⏰ Work Cooldown",
+                description=f"You can work again in **{minutes}m {seconds}s**",
+                color=int(config.colors['warning'].replace('#', ''), 16)
+            )
+            embed.set_footer(text="Wonderkind • Where Wonder Meets Chrome Dreams")
+            await ctx.send(embed=embed)
             return
     
     # Generate work reward
     base_amount = config.currency['workAmount']
     work_amount = random.randint(base_amount - 10, base_amount + 20)
     
-    # Work job options
+    # Check for booster bonus
+    if ctx.author.premium_since:  # Boost bonus
+        work_amount += config.booster['workBonus']
+    
+    # Wonder work job options
     jobs = [
-        "coding", "designing", "streaming", "moderating", "helping others",
-        "creating content", "building bots", "managing servers", "tutoring"
+        "wonder coding", "mystical designing", "dream streaming", "kingdom moderating", 
+        "helping fellow dreamers", "creating wonder content", "building mystical bots", 
+        "managing dream servers", "tutoring wonder magic", "chrome development"
     ]
     job = random.choice(jobs)
     
@@ -284,25 +316,32 @@ async def work(ctx: commands.Context):
     await ctx.bot.database.add_transaction(str(ctx.author.id), 'work', work_amount, f'Work: {job}')
     
     embed = discord.Embed(
-        title=f"💼 Work Complete",
-        description=f"You worked as **{job}** and earned **{work_amount:,}** {config.currency['name']}!",
+        title=f"✨ Wonder Work Complete",
+        description=f"You worked on **{job}** and earned **{work_amount:,}** {config.currency['name']}!",
         color=int(config.colors['success'].replace('#', ''), 16)
     )
     embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.display_avatar.url)
+    embed.set_footer(text="Wonderkind • Where Wonder Meets Chrome Dreams")
     
     await ctx.send(embed=embed)
 
-@commands.command(name='leaderboard', aliases=['lb', 'top'])
+@commands.hybrid_command(name='leaderboard', aliases=['lb', 'top'])
 async def leaderboard(ctx: commands.Context):
-    """View the leaderboard"""
+    """View the wonder leaderboard"""
     top_users = await ctx.bot.database.get_top_users(10)
     
     if not top_users:
-        await ctx.send("❌ No users found on the leaderboard!")
+        embed = discord.Embed(
+            title="🌙 Empty Leaderboard",
+            description="No users found on the leaderboard yet!",
+            color=int(config.colors['warning'].replace('#', ''), 16)
+        )
+        embed.set_footer(text="Wonderkind • Where Wonder Meets Chrome Dreams")
+        await ctx.send(embed=embed)
         return
     
     embed = discord.Embed(
-        title=f"{config.theme['emojis']['crown']} {config.currency['name']} Leaderboard",
+        title=f"🌌 {config.currency['name']} Wonder Leaderboard",
         color=int(config.colors['primary'].replace('#', ''), 16)
     )
     
@@ -318,42 +357,69 @@ async def leaderboard(ctx: commands.Context):
             continue
     
     embed.description = description
-    embed.set_footer(text=f"Total users: {len(top_users)}")
+    embed.set_footer(text=f"Total dreamers: {len(top_users)} • Wonderkind • Where Wonder Meets Chrome Dreams")
     
     await ctx.send(embed=embed)
 
-# Game Commands with Animations
-@commands.command(name='coinflip', aliases=['cf'])
+# Game Commands with Animations (Hybrid: both prefix and slash)
+@commands.hybrid_command(name='coinflip', aliases=['cf'])
+@app_commands.describe(
+    bet_amount='Amount of WonderCoins to bet',
+    choice='Choose heads or tails (h/t)'
+)
 async def coinflip(ctx: commands.Context, bet_amount: int, choice: str):
-    """Play animated coinflip game"""
+    """Play animated wonder coinflip game"""
     result = await ctx.bot.games_system.coinflip(str(ctx.author.id), bet_amount, choice, ctx)
     
     if not result['success']:
-        await ctx.send(result['message'])
+        error_embed = discord.Embed(
+            title="🌙 Coinflip Error",
+            description=result['message'],
+            color=int(config.colors['error'].replace('#', ''), 16)
+        )
+        error_embed.set_footer(text="Wonderkind • Where Wonder Meets Chrome Dreams")
+        await ctx.send(embed=error_embed)
         return
     
     # Animation message is already updated in the game method
     # No need to send another message if animation was shown
 
-@commands.command(name='dice')
+@commands.hybrid_command(name='dice')
+@app_commands.describe(
+    bet_amount='Amount of WonderCoins to bet',
+    target='Target number to roll (1-6)'
+)
 async def dice(ctx: commands.Context, bet_amount: int, target: int):
-    """Play animated dice game"""
+    """Play animated wonder dice game"""
     result = await ctx.bot.games_system.dice(str(ctx.author.id), bet_amount, target, ctx)
     
     if not result['success']:
-        await ctx.send(result['message'])
+        error_embed = discord.Embed(
+            title="🌙 Dice Error",
+            description=result['message'],
+            color=int(config.colors['error'].replace('#', ''), 16)
+        )
+        error_embed.set_footer(text="Wonderkind • Where Wonder Meets Chrome Dreams")
+        await ctx.send(embed=error_embed)
         return
     
     # Animation message is already updated in the game method
     # No need to send another message if animation was shown
 
-@commands.command(name='slots')
+@commands.hybrid_command(name='slots')
+@app_commands.describe(bet_amount='Amount of WonderCoins to bet')
 async def slots(ctx: commands.Context, bet_amount: int):
-    """Play animated slots game"""
+    """Play animated wonder slot machine"""
     result = await ctx.bot.games_system.slots(str(ctx.author.id), bet_amount, ctx)
     
     if not result['success']:
-        await ctx.send(result['message'])
+        error_embed = discord.Embed(
+            title="🌙 Slots Error",
+            description=result['message'],
+            color=int(config.colors['error'].replace('#', ''), 16)
+        )
+        error_embed.set_footer(text="Wonderkind • Where Wonder Meets Chrome Dreams")
+        await ctx.send(embed=error_embed)
         return
     
     # Animation message is already updated in the game method
@@ -753,10 +819,12 @@ async def quick_giveaway(ctx: commands.Context, duration: str, winners: int, *, 
     
     await ctx.send(embed=embed)
 
-@commands.command(name='adddrops')
+# Admin Commands (Hybrid: both prefix and slash)
+@commands.hybrid_command(name='adddrops')
 @commands.has_permissions(manage_guild=True)
+@app_commands.describe(channel='Channel to add to drop system (optional, defaults to current)')
 async def add_drop_channel(ctx: commands.Context, channel: discord.TextChannel = None):
-    """Add a channel to the drop system (Admin only)"""
+    """Add a channel to the wonder drop system (Admin only)"""
     target_channel = channel or ctx.channel
     
     result = await ctx.bot.drop_system.add_drop_channel(
@@ -764,17 +832,20 @@ async def add_drop_channel(ctx: commands.Context, channel: discord.TextChannel =
     )
     
     embed = discord.Embed(
-        title="💰 Drop Channel Configuration",
+        title="✨ Wonder Drop Channel Configuration",
         description=result['message'],
         color=int(config.colors['success' if result['success'] else 'error'].replace('#', ''), 16)
     )
+    embed.add_field(name="Channel", value=target_channel.mention, inline=True)
+    embed.set_footer(text="Wonderkind • Where Wonder Meets Chrome Dreams")
     
     await ctx.send(embed=embed)
 
-@commands.command(name='removedrops')
+@commands.hybrid_command(name='removedrops')
 @commands.has_permissions(manage_guild=True)
+@app_commands.describe(channel='Channel to remove from drop system (optional, defaults to current)')
 async def remove_drop_channel(ctx: commands.Context, channel: discord.TextChannel = None):
-    """Remove a channel from the drop system (Admin only)"""
+    """Remove a channel from the wonder drop system (Admin only)"""
     target_channel = channel or ctx.channel
     
     result = await ctx.bot.drop_system.remove_drop_channel(
@@ -782,26 +853,37 @@ async def remove_drop_channel(ctx: commands.Context, channel: discord.TextChanne
     )
     
     embed = discord.Embed(
-        title="💰 Drop Channel Configuration",
+        title="✨ Wonder Drop Channel Configuration",
         description=result['message'],
         color=int(config.colors['success' if result['success'] else 'error'].replace('#', ''), 16)
     )
+    embed.add_field(name="Channel", value=target_channel.mention, inline=True)
+    embed.set_footer(text="Wonderkind • Where Wonder Meets Chrome Dreams")
     
     await ctx.send(embed=embed)
 
-@commands.command(name='forcedrop')
+@commands.hybrid_command(name='forcedrop')
 @commands.has_permissions(administrator=True)
+@app_commands.describe(
+    amount='Custom amount of WonderCoins (optional)',
+    rarity='Custom rarity: common, rare, epic, legendary (optional)'
+)
 async def force_drop(ctx: commands.Context, amount: int = None, rarity: str = None):
-    """Force a WonderCoins drop in current channel (Admin only)"""
+    """Force a wonder drop in current channel (Admin only)"""
     result = await ctx.bot.drop_system.force_drop_in_channel(
         str(ctx.guild.id), str(ctx.channel.id), amount, rarity
     )
     
     embed = discord.Embed(
-        title="✨ Force Drop",
+        title="🌟 Force Wonder Drop",
         description=result['message'],
         color=int(config.colors['success' if result['success'] else 'error'].replace('#', ''), 16)
     )
+    if amount:
+        embed.add_field(name="Custom Amount", value=f"{amount:,} {config.currency['symbol']}", inline=True)
+    if rarity:
+        embed.add_field(name="Custom Rarity", value=rarity.title(), inline=True)
+    embed.set_footer(text="Wonderkind • Where Wonder Meets Chrome Dreams")
     await ctx.send(embed=embed)
 
 @commands.command(name='configdrops')
@@ -926,30 +1008,30 @@ async def list_drop_channels(ctx: commands.Context):
     
     await ctx.send(embed=embed)
 
-# Help Command
-@commands.command(name='help')
+# Help Command (Hybrid)
+@commands.hybrid_command(name='help')
 async def help_command(ctx: commands.Context):
-    """Show help information"""
+    """Show wonderkind help information"""
     embed = discord.Embed(
-        title=f"🤖 {config.branding['name']} - Help",
-        description=config.branding['tagline'],
+        title=f"🌌 {config.branding['name']} - Wonder Help",
+        description=f"✨ {config.branding['tagline']} ✨",
         color=int(config.colors['primary'].replace('#', ''), 16)
     )
     
     embed.add_field(
-        name="💰 Economy Commands",
-        value="`w.balance` - Check balance\n"
-              "`w.daily` - Daily reward\n"
-              "`w.work` - Work for coins\n"
-              "`w.leaderboard` - Top earners",
+        name="💰 Wonder Economy",
+        value="`/balance` or `w.balance` - Check balance\n"
+              "`/daily` or `w.daily` - Daily wonder reward\n"
+              "`/work` or `w.work` - Work in wonderkind\n"
+              "`/leaderboard` or `w.leaderboard` - Top dreamers",
         inline=True
     )
     
     embed.add_field(
-        name="🎮 Games",
-        value="`w.coinflip <amount> <h/t>` - Coinflip\n"
-              "`w.dice <amount> <1-6>` - Dice roll\n"
-              "`w.slots <amount>` - Slot machine\n"
+        name="🎮 Wonder Games (Animated)",
+        value="`/coinflip` or `w.coinflip` - Animated flip\n"
+              "`/dice` or `w.dice` - Animated dice roll\n"
+              "`/slots` or `w.slots` - Animated slot machine\n"
               "`w.gamestats` - Gambling stats",
         inline=True
     )
@@ -980,14 +1062,14 @@ async def help_command(ctx: commands.Context):
     )
     
     embed.add_field(
-        name="🛡️ Admin Commands",
+        name="🛡️ Admin Wonder Commands",
         value="`w.giveaway end` - End giveaway\n"
               "`w.giveaway reroll` - Reroll winners\n"
-              "`w.adddrops` - Add drop channel\n"
-              "`w.removedrops` - Remove drop channel\n"
+              "`/adddrops` or `w.adddrops` - Add drop channel\n"
+              "`/removedrops` or `w.removedrops` - Remove channel\n"
               "`w.dropchannels` - List drop channels\n"
               "`w.configdrops` - Configure channel drops\n"
-              "`w.forcedrop` - Force wonder drop",
+              "`/forcedrop` or `w.forcedrop` - Force wonder drop",
         inline=True
     )
     
@@ -999,7 +1081,14 @@ async def help_command(ctx: commands.Context):
         inline=True
     )
     
-    embed.set_footer(text=f"Bot Version: {config.branding['version']}")
+    embed.add_field(
+        name="✨ Slash Commands Support",
+        value="🌟 All commands now support both slash commands (`/`) and prefix commands (`w.`)!\n"
+              "🔮 Slash commands provide better autocomplete and easier usage.",
+        inline=False
+    )
+    
+    embed.set_footer(text=f"Wonderkind v{config.branding['version']} • Where Wonder Meets Chrome Dreams")
     embed.timestamp = datetime.now()
     
     await ctx.send(embed=embed)
