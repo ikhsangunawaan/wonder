@@ -7,10 +7,10 @@
     "workAmount": 50
   },
   "branding": {
-    "name": "Luxury Kingdom Bot",
-    "tagline": "Royal Elegance Awaits",
+    "name": "Wonder",
+    "tagline": "Where every wanderer finds a friend",
     "version": "2.0.0",
-    "theme": "Luxury Kingdom Aesthetic"
+    "theme": "Wonder World Aesthetic"
   },
   "booster": {
     "dailyBonus": 50,
@@ -52,8 +52,8 @@
     "text": "#F5F5DC"
   },
   "theme": {
-    "name": "Luxury Kingdom",
-    "style": "royal-luxury",
+    "name": "Wonder",
+    "style": "wonderchrome",
     "emojis": {
       "crown": "👑",
       "gem": "💎",
