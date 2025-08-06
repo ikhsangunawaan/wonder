@@ -52,6 +52,38 @@ pip install -r requirements.txt
 python3 run.py
 ```
 
+## Deployment to Hosting Services
+
+### Option 1: Using start.sh Script (Recommended)
+```bash
+chmod +x start.sh
+./start.sh
+```
+
+### Option 2: Direct Python Command
+```bash
+python3 run.py
+```
+
+### Option 3: For Heroku/Railway/Similar Platforms
+Use the included `Procfile`:
+```
+worker: python3 run.py
+```
+
+### Fixing Python Path Issues
+If you encounter errors like "can't open file '/usr/local/bin/python'":
+
+1. **Use the start.sh script** - it automatically detects the correct Python path
+2. **Check your hosting provider's Python path** - some use `/usr/bin/python3` instead of `/usr/local/bin/python`
+3. **Use environment variables** in your hosting dashboard to set the Python executable path
+
+### Environment Variables for Hosting
+Make sure to set these in your hosting provider's dashboard:
+- `DISCORD_TOKEN` - Your Discord bot token
+- `PREMIUM_ROLE_ID` - Optional premium role ID
+- `BOOSTER_ROLE_ID` - Optional booster role ID
+
 ## Bot Features
 
 - **Economy System**: WonderCoins, daily rewards, work commands
@@ -78,6 +110,7 @@ The bot uses `w.` as the default prefix. Example commands:
 1. **"Improper token" error**: Make sure your Discord token is correct in the `.env` file
 2. **Import errors**: Ensure all dependencies are installed correctly
 3. **Permission errors**: Make sure the bot has necessary permissions in your Discord server
+4. **Python path errors**: Use the `start.sh` script or check your hosting provider's Python installation path
 
 ## Database
 
