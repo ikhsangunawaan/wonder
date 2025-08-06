@@ -1,9 +1,10 @@
 import discord
+from discord.ext import commands
 import asyncio
 import random
 import logging
-from datetime import datetime
-from typing import Dict, Any, List, Optional
+from datetime import datetime, timedelta
+from typing import Dict, Any, Optional
 import math
 
 from database import database
@@ -11,28 +12,37 @@ from config import config
 from cooldown_manager import cooldown_manager
 
 class GamesSystem:
-    """Manages gambling games like coinflip, dice, and slots"""
+    """Manages gambling games like coinflip, dice, and slots with animations"""
     
     def __init__(self):
         self.games_config = config.games
         
-        # Slot machine symbols and their values
-        self.slot_symbols = {
-            '🍎': {'value': 2, 'weight': 25},  # Common
-            '🍊': {'value': 3, 'weight': 20},
-            '🍇': {'value': 4, 'weight': 15},
-            '🍒': {'value': 5, 'weight': 12},
-            '🍓': {'value': 6, 'weight': 10},
-            '💎': {'value': 10, 'weight': 8},
-            '⭐': {'value': 15, 'weight': 5},
-            '👑': {'value': 25, 'weight': 3},
-            '💰': {'value': 50, 'weight': 2}   # Rare
+        # Slot machine emojis
+        self.slot_emojis = [
+            '🍒', '🍋', '🍊', '🍇', '🔔', '💎', '⭐', '🌟'
+        ]
+        
+        # Slot machine payouts (multiplier based on combination)
+        self.slot_payouts = {
+            ('💎', '💎', '💎'): 10.0,  # Triple diamonds
+            ('⭐', '⭐', '⭐'): 8.0,   # Triple stars
+            ('🌟', '🌟', '🌟'): 6.0,   # Triple bright stars
+            ('🔔', '🔔', '🔔'): 5.0,   # Triple bells
+            ('🍇', '🍇', '🍇'): 4.0,   # Triple grapes
+            ('🍊', '🍊', '🍊'): 3.0,   # Triple oranges
+            ('🍋', '🍋', '🍋'): 2.5,   # Triple lemons
+            ('🍒', '🍒', '🍒'): 2.0,   # Triple cherries
         }
         
         self.dice_faces = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅']
+        
+        # Animation sequences
+        self.coinflip_animation = ['🪙', '🌀', '💫', '✨', '🌟']
+        self.dice_animation = ['🎲', '🔄', '💫', '✨', '🎯']
+        self.slots_animation = ['🎰', '💫', '⚡', '✨', '🌟']
     
-    async def coinflip(self, user_id: str, bet_amount: int, choice: str) -> Dict[str, Any]:
-        """Play coinflip game"""
+    async def coinflip(self, user_id: str, bet_amount: int, choice: str, ctx=None) -> Dict[str, Any]:
+        """Play coinflip game with animation"""
         try:
             # Validate bet amount
             min_bet = self.games_config.get('coinflip', {}).get('minBet', 10)
@@ -75,6 +85,11 @@ class GamesSystem:
             has_luck = await cooldown_manager.apply_gambling_luck(user_id)
             luck_bonus = 0.1 if has_luck else 0  # 10% better odds
             
+            # Show animation if context is provided
+            animation_message = None
+            if ctx:
+                animation_message = await self._show_coinflip_animation(ctx, user_choice, bet_amount)
+            
             # Flip the coin (slightly favor user if they have luck)
             win_chance = 0.5 + luck_bonus
             result = 'heads' if random.random() < win_chance else 'tails'
@@ -98,49 +113,99 @@ class GamesSystem:
             await cooldown_manager.set_cooldown(user_id, 'coinflip')
             
             # Create result embed
-            coin_emoji = "🪙" if result == "heads" else "🪙"
-            result_emoji = "🎉" if won else "😔"
+            coin_emoji = '👑' if result == 'heads' else '🌙'  # Wonder theme
+            color = int(config.colors['success'].replace('#', ''), 16) if won else int(config.colors['error'].replace('#', ''), 16)
             
             embed = discord.Embed(
-                title=f"{coin_emoji} Coinflip Result",
-                color=int(config.colors['success' if won else 'error'].replace('#', ''), 16)
+                title=f"{coin_emoji} Wonder Coinflip Result",
+                color=color
             )
             
-            embed.add_field(name="Your Choice", value=user_choice.title(), inline=True)
-            embed.add_field(name="Result", value=result.title(), inline=True)
-            embed.add_field(name="Outcome", value="Won! 🎉" if won else "Lost 😔", inline=True)
+            embed.add_field(name="Your Choice", value=f"{'👑' if user_choice == 'heads' else '🌙'} {user_choice.title()}", inline=True)
+            embed.add_field(name="Result", value=f"{coin_emoji} {result.title()}", inline=True)
+            embed.add_field(name="Outcome", value="🌟 You Won!" if won else "🌙 You Lost", inline=True)
+            
+            embed.add_field(name="Bet Amount", value=f"{bet_amount:,} {config.currency['symbol']}", inline=True)
             
             if won:
-                embed.add_field(
-                    name="Winnings", 
-                    value=f"+{winnings:,} {config.currency['symbol']}", 
-                    inline=False
-                )
+                embed.add_field(name="Winnings", value=f"+{winnings:,} {config.currency['symbol']}", inline=True)
+                embed.add_field(name="Total Return", value=f"{total_return:,} {config.currency['symbol']}", inline=True)
             else:
-                embed.add_field(
-                    name="Loss", 
-                    value=f"-{bet_amount:,} {config.currency['symbol']}", 
-                    inline=False
-                )
+                embed.add_field(name="Lost", value=f"-{bet_amount:,} {config.currency['symbol']}", inline=True)
+                embed.add_field(name="Better Luck Next Time!", value="✨ Try again soon!", inline=True)
             
             if has_luck:
-                embed.set_footer(text="🍀 Gambling luck was used!")
+                embed.add_field(name="🍀 Wonder Luck", value="Active! +10% win chance", inline=False)
+            
+            embed.set_footer(text="Wonderkind • Where Wonder Meets Chrome Dreams")
+            embed.timestamp = datetime.now()
+            
+            # Update animation message with final result if available
+            if animation_message:
+                try:
+                    await animation_message.edit(embed=embed)
+                except:
+                    pass
             
             return {
                 "success": True,
+                "embed": embed,
                 "won": won,
-                "result": result,
-                "winnings": winnings,
-                "embed": embed
+                "winnings": winnings if won else -bet_amount,
+                "result": result
             }
             
         except Exception as e:
             logging.error(f"Error in coinflip game: {e}")
             return {"success": False, "message": "An error occurred while playing coinflip."}
     
-    async def dice(self, user_id: str, bet_amount: int, target: int) -> Dict[str, Any]:
-        """Play dice game"""
+    async def _show_coinflip_animation(self, ctx, user_choice: str, bet_amount: int) -> discord.Message:
+        """Show animated coinflip sequence"""
         try:
+            # Initial embed
+            embed = discord.Embed(
+                title="🪙 Wonder Coin is Flipping...",
+                description=f"You chose: {'👑 Heads' if user_choice == 'heads' else '🌙 Tails'}\nBet: {bet_amount:,} {config.currency['symbol']}",
+                color=int(config.colors['info'].replace('#', ''), 16)
+            )
+            
+            message = await ctx.send(embed=embed)
+            
+            # Animation sequence
+            animation_frames = [
+                ("🪙 Flip!", "The coin spins in the air..."),
+                ("🌀 Spinning!", "Round and round it goes..."),
+                ("💫 Tumbling!", "Almost there..."),
+                ("✨ Slowing!", "Coming to rest..."),
+                ("🎯 Landing!", "The coin settles...")
+            ]
+            
+            for i, (title, description) in enumerate(animation_frames):
+                embed.title = title
+                embed.description = f"You chose: {'👑 Heads' if user_choice == 'heads' else '🌙 Tails'}\nBet: {bet_amount:,} {config.currency['symbol']}\n\n{description}"
+                
+                try:
+                    await message.edit(embed=embed)
+                    await asyncio.sleep(0.8)  # 800ms between frames
+                except:
+                    break
+            
+            return message
+            
+        except Exception as e:
+            logging.error(f"Error in coinflip animation: {e}")
+            return None
+
+    async def dice(self, user_id: str, bet_amount: int, target: int, ctx=None) -> Dict[str, Any]:
+        """Play dice game with animation"""
+        try:
+            # Validate target
+            if target < 1 or target > 6:
+                return {
+                    "success": False,
+                    "message": "Target must be between 1 and 6"
+                }
+            
             # Validate bet amount
             min_bet = self.games_config.get('dice', {}).get('minBet', 10)
             max_bet = self.games_config.get('dice', {}).get('maxBet', 500)
@@ -149,13 +214,6 @@ class GamesSystem:
                 return {
                     "success": False,
                     "message": f"Bet amount must be between {min_bet:,} and {max_bet:,} {config.currency['symbol']}"
-                }
-            
-            # Validate target
-            if target < 1 or target > 6:
-                return {
-                    "success": False,
-                    "message": "Target must be between 1 and 6"
                 }
             
             # Check cooldown
@@ -177,23 +235,38 @@ class GamesSystem:
             # Check for gambling luck effect
             has_luck = await cooldown_manager.apply_gambling_luck(user_id)
             
+            # Show animation if context is provided
+            animation_message = None
+            if ctx:
+                animation_message = await self._show_dice_animation(ctx, target, bet_amount)
+            
             # Roll the dice
-            if has_luck and random.random() < 0.3:  # 30% chance to get desired result with luck
-                result = target
+            if has_luck:
+                # Better chance of hitting target with luck
+                if random.random() < 0.15:  # 15% chance to hit exact target with luck
+                    result = target
+                else:
+                    result = random.randint(1, 6)
             else:
                 result = random.randint(1, 6)
+            
+            # Calculate multiplier based on target difficulty
+            multipliers = {1: 5.0, 2: 4.0, 3: 3.0, 4: 3.0, 5: 4.0, 6: 5.0}
+            multiplier = multipliers.get(target, 3.0)
             
             # Determine win/loss
             won = (result == target)
             
-            # Calculate payout (5:1 for exact match)
+            # Calculate payout
             if won:
-                winnings = bet_amount * 5
+                winnings = int(bet_amount * multiplier)
+                total_return = bet_amount + winnings
                 await database.update_balance(user_id, winnings)
                 await database.add_transaction(user_id, 'dice_win', winnings, f'Dice win: rolled {result}')
             else:
                 await database.update_balance(user_id, -bet_amount)
                 await database.add_transaction(user_id, 'dice_loss', -bet_amount, f'Dice loss: rolled {result}')
+                total_return = 0
                 winnings = -bet_amount
             
             # Set cooldown
@@ -201,46 +274,93 @@ class GamesSystem:
             
             # Create result embed
             dice_emoji = self.dice_faces[result - 1]
+            color = int(config.colors['success'].replace('#', ''), 16) if won else int(config.colors['error'].replace('#', ''), 16)
             
             embed = discord.Embed(
-                title=f"🎲 Dice Roll Result",
-                color=int(config.colors['success' if won else 'error'].replace('#', ''), 16)
+                title=f"🎲 Wonder Dice Roll Result",
+                color=color
             )
             
             embed.add_field(name="Your Target", value=f"{target} {self.dice_faces[target-1]}", inline=True)
             embed.add_field(name="Result", value=f"{result} {dice_emoji}", inline=True)
-            embed.add_field(name="Outcome", value="Won! 🎉" if won else "Lost 😔", inline=True)
+            embed.add_field(name="Outcome", value="🌟 Perfect Hit!" if won else "🌙 Missed", inline=True)
+            
+            embed.add_field(name="Bet Amount", value=f"{bet_amount:,} {config.currency['symbol']}", inline=True)
             
             if won:
-                embed.add_field(
-                    name="Winnings", 
-                    value=f"+{winnings:,} {config.currency['symbol']} (5x)", 
-                    inline=False
-                )
+                embed.add_field(name="Multiplier", value=f"{multiplier}x", inline=True)
+                embed.add_field(name="Winnings", value=f"+{winnings:,} {config.currency['symbol']}", inline=True)
+                embed.add_field(name="Total Return", value=f"{total_return:,} {config.currency['symbol']}", inline=False)
             else:
-                embed.add_field(
-                    name="Loss", 
-                    value=f"-{bet_amount:,} {config.currency['symbol']}", 
-                    inline=False
-                )
+                embed.add_field(name="Lost", value=f"-{bet_amount:,} {config.currency['symbol']}", inline=True)
+                embed.add_field(name="Try Again!", value="✨ Better luck next roll!", inline=True)
             
             if has_luck:
-                embed.set_footer(text="🍀 Gambling luck was used!")
+                embed.add_field(name="🍀 Wonder Luck", value="Active! +15% target chance", inline=False)
+            
+            embed.set_footer(text="Wonderkind • Where Wonder Meets Chrome Dreams")
+            embed.timestamp = datetime.now()
+            
+            # Update animation message with final result if available
+            if animation_message:
+                try:
+                    await animation_message.edit(embed=embed)
+                except:
+                    pass
             
             return {
                 "success": True,
+                "embed": embed,
                 "won": won,
+                "winnings": winnings if won else -bet_amount,
                 "result": result,
-                "winnings": winnings,
-                "embed": embed
+                "target": target,
+                "multiplier": multiplier
             }
             
         except Exception as e:
             logging.error(f"Error in dice game: {e}")
             return {"success": False, "message": "An error occurred while playing dice."}
     
-    async def slots(self, user_id: str, bet_amount: int) -> Dict[str, Any]:
-        """Play slots game"""
+    async def _show_dice_animation(self, ctx, target: int, bet_amount: int) -> discord.Message:
+        """Show animated dice rolling sequence"""
+        try:
+            # Initial embed
+            embed = discord.Embed(
+                title="🎲 Wonder Dice is Rolling...",
+                description=f"Target: {target} {self.dice_faces[target-1]}\nBet: {bet_amount:,} {config.currency['symbol']}",
+                color=int(config.colors['info'].replace('#', ''), 16)
+            )
+            
+            message = await ctx.send(embed=embed)
+            
+            # Animation sequence
+            animation_frames = [
+                ("🎲 Rolling!", "The dice tumbles across the mystical table..."),
+                ("🔄 Spinning!", "Bouncing and spinning with wonder energy..."),
+                ("💫 Tumbling!", "Almost done rolling..."),
+                ("✨ Settling!", "Coming to a final rest..."),
+                ("🎯 Stopped!", "The dice reveals its number...")
+            ]
+            
+            for i, (title, description) in enumerate(animation_frames):
+                embed.title = title
+                embed.description = f"Target: {target} {self.dice_faces[target-1]}\nBet: {bet_amount:,} {config.currency['symbol']}\n\n{description}"
+                
+                try:
+                    await message.edit(embed=embed)
+                    await asyncio.sleep(0.9)  # 900ms between frames
+                except:
+                    break
+            
+            return message
+            
+        except Exception as e:
+            logging.error(f"Error in dice animation: {e}")
+            return None
+
+    async def slots(self, user_id: str, bet_amount: int, ctx=None) -> Dict[str, Any]:
+        """Play slots game with animation"""
         try:
             # Validate bet amount
             min_bet = self.games_config.get('slots', {}).get('minBet', 20)
@@ -272,6 +392,11 @@ class GamesSystem:
             has_luck = await cooldown_manager.apply_gambling_luck(user_id)
             luck_multiplier = 1.5 if has_luck else 1.0
             
+            # Show animation if context is provided
+            animation_message = None
+            if ctx:
+                animation_message = await self._show_slots_animation(ctx, bet_amount)
+            
             # Spin the slots
             reels = []
             for _ in range(3):
@@ -295,7 +420,7 @@ class GamesSystem:
             
             # Create result embed
             embed = discord.Embed(
-                title="🎰 Slot Machine",
+                title="🎰 Wonder Slot Machine",
                 color=int(config.colors['success' if win_info['winnings'] > 0 else 'error'].replace('#', ''), 16)
             )
             
@@ -321,6 +446,13 @@ class GamesSystem:
             if has_luck:
                 embed.set_footer(text="🍀 Gambling luck was used!")
             
+            # Update animation message with final result if available
+            if animation_message:
+                try:
+                    await animation_message.edit(embed=embed)
+                except:
+                    pass
+
             return {
                 "success": True,
                 "won": win_info['winnings'] > 0,
@@ -509,6 +641,44 @@ class GamesSystem:
                 )
         
         return embed
+    
+    async def _show_slots_animation(self, ctx, bet_amount: int) -> discord.Message:
+        """Show animated slots spinning sequence"""
+        try:
+            # Initial embed
+            embed = discord.Embed(
+                title="🎰 Wonder Slots Spinning...",
+                description=f"Bet: {bet_amount:,} {config.currency['symbol']}\n\nThe mystical reels begin to spin...",
+                color=int(config.colors['info'].replace('#', ''), 16)
+            )
+            
+            message = await ctx.send(embed=embed)
+            
+            # Animation sequence with spinning reels
+            animation_frames = [
+                ("🎰 Spinning!", "⚡⚡⚡", "The reels spin with wonder energy..."),
+                ("🎰 Spinning!", "🌀🌀🌀", "Round and round they go..."),
+                ("🎰 Spinning!", "💫💫💫", "Mystical forces at work..."),
+                ("🎰 Slowing!", "✨✨✨", "The first reel stops..."),
+                ("🎰 Almost!", "🌟🌟🌟", "The second reel stops..."),
+                ("🎰 Final!", "🎯🎯🎯", "The last reel settles...")
+            ]
+            
+            for i, (title, reel_display, description) in enumerate(animation_frames):
+                embed.title = title
+                embed.description = f"Bet: {bet_amount:,} {config.currency['symbol']}\n\n{reel_display}\n\n{description}"
+                
+                try:
+                    await message.edit(embed=embed)
+                    await asyncio.sleep(1.0)  # 1 second between frames
+                except:
+                    break
+            
+            return message
+            
+        except Exception as e:
+            logging.error(f"Error in slots animation: {e}")
+            return None
 
 # Global games system instance
 games_system = GamesSystem()

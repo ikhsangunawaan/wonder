@@ -322,39 +322,42 @@ async def leaderboard(ctx: commands.Context):
     
     await ctx.send(embed=embed)
 
-# Game Commands
+# Game Commands with Animations
 @commands.command(name='coinflip', aliases=['cf'])
 async def coinflip(ctx: commands.Context, bet_amount: int, choice: str):
-    """Play coinflip game"""
-    result = await ctx.bot.games_system.coinflip(str(ctx.author.id), bet_amount, choice)
+    """Play animated coinflip game"""
+    result = await ctx.bot.games_system.coinflip(str(ctx.author.id), bet_amount, choice, ctx)
     
     if not result['success']:
         await ctx.send(result['message'])
         return
     
-    await ctx.send(embed=result['embed'])
+    # Animation message is already updated in the game method
+    # No need to send another message if animation was shown
 
 @commands.command(name='dice')
 async def dice(ctx: commands.Context, bet_amount: int, target: int):
-    """Play dice game"""
-    result = await ctx.bot.games_system.dice(str(ctx.author.id), bet_amount, target)
+    """Play animated dice game"""
+    result = await ctx.bot.games_system.dice(str(ctx.author.id), bet_amount, target, ctx)
     
     if not result['success']:
         await ctx.send(result['message'])
         return
     
-    await ctx.send(embed=result['embed'])
+    # Animation message is already updated in the game method
+    # No need to send another message if animation was shown
 
 @commands.command(name='slots')
 async def slots(ctx: commands.Context, bet_amount: int):
-    """Play slots game"""
-    result = await ctx.bot.games_system.slots(str(ctx.author.id), bet_amount)
+    """Play animated slots game"""
+    result = await ctx.bot.games_system.slots(str(ctx.author.id), bet_amount, ctx)
     
     if not result['success']:
         await ctx.send(result['message'])
         return
     
-    await ctx.send(embed=result['embed'])
+    # Animation message is already updated in the game method
+    # No need to send another message if animation was shown
 
 @commands.command(name='gamestats')
 async def gamestats(ctx: commands.Context, user: discord.Member = None):
