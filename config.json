@@ -7,10 +7,10 @@
     "workAmount": 50
   },
   "branding": {
-    "name": "Wonder",
-    "tagline": "Where every wanderer finds a friend",
+    "name": "Wonderkind",
+    "tagline": "Where Wonder Meets Chrome Dreams",
     "version": "2.0.0",
-    "theme": "Wonder World Aesthetic"
+    "theme": "Wonderkind Dream Aesthetic"
   },
   "booster": {
     "dailyBonus": 50,
@@ -38,53 +38,53 @@
     }
   },
   "colors": {
-    "primary": "#FFD700",
-    "secondary": "#DAA520", 
-    "accent": "#8B4513",
-    "success": "#228B22",
-    "error": "#DC143C",
-    "warning": "#FF8C00",
-    "info": "#4169E1",
-    "royal": "#800080",
-    "luxury": "#FF69B4",
-    "kingdom": "#FFD700",
-    "background": "#2F1B69",
-    "text": "#F5F5DC"
+    "primary": "#B8C5D6",
+    "secondary": "#9BADBE", 
+    "accent": "#88B5B1",
+    "success": "#8FBC8F",
+    "error": "#CD919E",
+    "warning": "#E6B077",
+    "info": "#87CEEB",
+    "royal": "#A89CC8",
+    "luxury": "#D8B4DA",
+    "kingdom": "#D4E0ED",
+    "background": "#6B5B95",
+    "text": "#F5F5F0"
   },
   "theme": {
-    "name": "Wonder",
+    "name": "Wonderkind",
     "style": "wonderchrome",
     "emojis": {
-      "crown": "👑",
-      "gem": "💎",
+      "crown": "🌌",
+      "gem": "🔮",
       "star": "⭐",
       "castle": "🏰",
-      "kingdom": "🏛️",
+      "kingdom": "🌌",
       "royal": "🎭",
-      "diamond": "💍",
+      "diamond": "💎",
       "magic": "✨",
-      "throne": "🪑",
-      "scepter": "🔱",
+      "throne": "🪄",
+      "scepter": "⭐",
       "treasure": "💰",
-      "medal": "🏅",
+      "medal": "🌟",
       "ribbon": "🎀",
-      "pearl": "🦪"
+      "pearl": "🦋"
     },
     "prefixes": {
-      "royal": "『ROYAL』",
-      "luxury": "『LUXURY』", 
+      "royal": "『WONDER』",
+      "luxury": "『DREAM』", 
       "kingdom": "『KINGDOM』",
-      "legend": "『LEGEND』",
-      "elite": "『NOBLE』",
-      "majestic": "『MAJESTIC』"
+      "legend": "『MYSTIC』",
+      "elite": "『CHROME』",
+      "majestic": "『GENTLE』"
     }
   },
   "cooldowns": {
     "daily": 1440,
     "work": 60,
-    "coinflip": 2,
-    "dice": 3,
-    "slots": 5,
+    "coinflip": 0.5,
+    "dice": 1,
+    "slots": 1.5,
     "mystery_box": 30,
     "use_item": 1
   },

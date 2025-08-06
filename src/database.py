@@ -204,10 +204,17 @@ class Database:
                     guild_id TEXT,
                     channel_id TEXT,
                     created_by TEXT,
+                    settings TEXT DEFAULT '{}',
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(guild_id, channel_id)
                 )
             """)
+            
+            # Add settings column to existing drop_channels if it doesn't exist
+            try:
+                await db.execute("ALTER TABLE drop_channels ADD COLUMN settings TEXT DEFAULT '{}'")
+            except:
+                pass  # Column already exists
 
             # WonderCoins drop statistics table
             await db.execute("""

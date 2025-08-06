@@ -80,9 +80,9 @@ class ShopSystem:
                 'emoji': '💎',
                 'rarity': 'legendary'
             },
-            'royal_crown': {
-                'name': 'Royal Crown',
-                'description': 'Symbol of ultimate wealth',
+            'wonder_crown': {
+                'name': 'Wonder Crown',
+                'description': 'Symbol of ultimate wonder',
                 'price': 50000,
                 'category': 'collectibles',
                 'emoji': '👑',

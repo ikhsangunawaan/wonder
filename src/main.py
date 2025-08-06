@@ -788,10 +788,140 @@ async def remove_drop_channel(ctx: commands.Context, channel: discord.TextChanne
 
 @commands.command(name='forcedrop')
 @commands.has_permissions(administrator=True)
-async def force_drop(ctx: commands.Context):
+async def force_drop(ctx: commands.Context, amount: int = None, rarity: str = None):
     """Force a WonderCoins drop in current channel (Admin only)"""
-    await ctx.bot.drop_system.create_drop(str(ctx.guild.id), str(ctx.channel.id))
-    await ctx.send("💰 Forced a WonderCoins drop in this channel!")
+    result = await ctx.bot.drop_system.force_drop_in_channel(
+        str(ctx.guild.id), str(ctx.channel.id), amount, rarity
+    )
+    
+    embed = discord.Embed(
+        title="✨ Force Drop",
+        description=result['message'],
+        color=int(config.colors['success' if result['success'] else 'error'].replace('#', ''), 16)
+    )
+    await ctx.send(embed=embed)
+
+@commands.command(name='configdrops')
+@commands.has_permissions(administrator=True)
+async def configure_drops(ctx: commands.Context, channel: discord.TextChannel, setting: str = None, value: str = None):
+    """Configure advanced drop settings for a channel (Admin only)
+    
+    Settings:
+    - rarity_mult: Multiply rare drop chances (0.5-3.0)
+    - amount_mult: Multiply drop amounts (0.5-5.0)
+    - frequency: Drop frequency modifier (0.1-10.0)
+    - rarities: Allowed rarities (comma separated: common,rare,epic,legendary)
+    """
+    if not setting:
+        # Show current settings
+        channels = await ctx.bot.drop_system.get_channel_list(str(ctx.guild.id))
+        target_channel = next((ch for ch in channels if ch['id'] == str(channel.id)), None)
+        
+        embed = discord.Embed(
+            title=f"🔮 Drop Settings for #{channel.name}",
+            color=int(config.colors['info'].replace('#', ''), 16)
+        )
+        
+        if target_channel:
+            settings = target_channel['settings']
+            embed.add_field(name="🎲 Rarity Multiplier", value=f"{settings.get('custom_rarity_multiplier', 1.0):.1f}x", inline=True)
+            embed.add_field(name="💰 Amount Multiplier", value=f"{settings.get('custom_amount_multiplier', 1.0):.1f}x", inline=True)
+            embed.add_field(name="⏰ Frequency Modifier", value=f"{settings.get('drop_frequency_modifier', 1.0):.1f}x", inline=True)
+            embed.add_field(name="✨ Allowed Rarities", value=", ".join(settings.get('allowed_rarities', ['common', 'rare', 'epic', 'legendary'])), inline=False)
+        else:
+            embed.description = "Channel is not configured for drops!"
+        
+        await ctx.send(embed=embed)
+        return
+    
+    # Update setting
+    try:
+        new_settings = {}
+        
+        if setting == "rarity_mult":
+            val = float(value)
+            if 0.5 <= val <= 3.0:
+                new_settings['custom_rarity_multiplier'] = val
+            else:
+                raise ValueError("Rarity multiplier must be between 0.5 and 3.0")
+        
+        elif setting == "amount_mult":
+            val = float(value)
+            if 0.5 <= val <= 5.0:
+                new_settings['custom_amount_multiplier'] = val
+            else:
+                raise ValueError("Amount multiplier must be between 0.5 and 5.0")
+        
+        elif setting == "frequency":
+            val = float(value)
+            if 0.1 <= val <= 10.0:
+                new_settings['drop_frequency_modifier'] = val
+            else:
+                raise ValueError("Frequency modifier must be between 0.1 and 10.0")
+        
+        elif setting == "rarities":
+            valid_rarities = ['common', 'rare', 'epic', 'legendary']
+            rarities = [r.strip().lower() for r in value.split(',')]
+            if all(r in valid_rarities for r in rarities) and rarities:
+                new_settings['allowed_rarities'] = rarities
+            else:
+                raise ValueError("Invalid rarities. Use: common,rare,epic,legendary")
+        
+        else:
+            raise ValueError("Invalid setting. Use: rarity_mult, amount_mult, frequency, rarities")
+        
+        result = await ctx.bot.drop_system.configure_channel_drops(
+            str(ctx.guild.id), str(channel.id), new_settings
+        )
+        
+        embed = discord.Embed(
+            title="⚙️ Drop Configuration",
+            description=result['message'],
+            color=int(config.colors['success' if result['success'] else 'error'].replace('#', ''), 16)
+        )
+        
+    except ValueError as e:
+        embed = discord.Embed(
+            title="❌ Configuration Error",
+            description=str(e),
+            color=int(config.colors['error'].replace('#', ''), 16)
+        )
+    
+    await ctx.send(embed=embed)
+
+@commands.command(name='dropchannels')
+@commands.has_permissions(manage_guild=True)
+async def list_drop_channels(ctx: commands.Context):
+    """List all configured drop channels (Admin only)"""
+    channels = await ctx.bot.drop_system.get_channel_list(str(ctx.guild.id))
+    
+    embed = discord.Embed(
+        title="🌌 Wonderkind Drop Channels",
+        color=int(config.colors['info'].replace('#', ''), 16)
+    )
+    
+    if not channels:
+        embed.description = "No drop channels configured! Use `w.adddrops #channel` to add one."
+    else:
+        embed.description = f"**{len(channels)}** channels configured for mystical drops:\n"
+        
+        for channel in channels:
+            settings = channel['settings']
+            mult_info = []
+            
+            if settings.get('custom_rarity_multiplier', 1.0) != 1.0:
+                mult_info.append(f"Rarity: {settings['custom_rarity_multiplier']:.1f}x")
+            
+            if settings.get('custom_amount_multiplier', 1.0) != 1.0:
+                mult_info.append(f"Amount: {settings['custom_amount_multiplier']:.1f}x")
+            
+            if settings.get('drop_frequency_modifier', 1.0) != 1.0:
+                mult_info.append(f"Frequency: {settings['drop_frequency_modifier']:.1f}x")
+            
+            extras = f" ({', '.join(mult_info)})" if mult_info else ""
+            embed.description += f"\n🔮 {channel['mention']}{extras}"
+    
+    await ctx.send(embed=embed)
 
 # Help Command
 @commands.command(name='help')
@@ -851,14 +981,18 @@ async def help_command(ctx: commands.Context):
         value="`w.giveaway end` - End giveaway\n"
               "`w.giveaway reroll` - Reroll winners\n"
               "`w.adddrops` - Add drop channel\n"
-              "`w.forcedrop` - Force coin drop",
+              "`w.removedrops` - Remove drop channel\n"
+              "`w.dropchannels` - List drop channels\n"
+              "`w.configdrops` - Configure channel drops\n"
+              "`w.forcedrop` - Force wonder drop",
         inline=True
     )
     
     embed.add_field(
-        name="💰 WonderCoins Drops",
-        value="Automatic coin drops appear randomly!\n"
-              "React quickly to collect them!",
+        name="✨ WonderCoins Drops",
+        value="Mystical wonder drops appear randomly!\n"
+              "React quickly to collect them!\n"
+              "🌟 Enhanced with wonder energy! 🌟",
         inline=True
     )
     
