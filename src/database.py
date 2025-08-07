@@ -34,14 +34,41 @@ class Database:
                 CREATE TABLE IF NOT EXISTS introduction_cards (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id TEXT UNIQUE,
+                    guild_id TEXT,
                     name TEXT,
                     age INTEGER,
                     location TEXT,
                     hobbies TEXT,
-                    favorite_color TEXT,
+                    favorite_color TEXT DEFAULT '#7C3AED',
                     bio TEXT,
+                    social_media TEXT,
+                    occupation TEXT,
+                    pronouns TEXT,
+                    timezone TEXT,
+                    fun_fact TEXT,
+                    card_template TEXT DEFAULT 'default',
+                    background_style TEXT DEFAULT 'gradient',
+                    is_public BOOLEAN DEFAULT TRUE,
+                    is_approved BOOLEAN DEFAULT TRUE,
+                    likes_count INTEGER DEFAULT 0,
+                    views_count INTEGER DEFAULT 0,
                     image_url TEXT,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
+            # Introduction card interactions table
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS intro_card_interactions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    card_id INTEGER,
+                    user_id TEXT,
+                    interaction_type TEXT, -- 'like', 'view', 'comment'
+                    comment_text TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (card_id) REFERENCES introduction_cards (id),
+                    UNIQUE (card_id, user_id, interaction_type)
                 )
             """)
 
@@ -52,6 +79,9 @@ class Database:
                     welcome_channel TEXT,
                     introduction_channel TEXT,
                     welcome_message TEXT,
+                    intro_card_theme TEXT DEFAULT '#7C3AED',
+                    intro_card_style TEXT DEFAULT 'gradient',
+                    intro_card_background_url TEXT,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
             """)
@@ -311,15 +341,43 @@ class Database:
     async def save_intro_card(self, data: Dict[str, Any]) -> int:
         """Save introduction card data"""
         async with aiosqlite.connect(self.db_path) as db:
-            cursor = await db.execute(
-                """INSERT OR REPLACE INTO introduction_cards 
-                   (user_id, name, age, location, hobbies, favorite_color, bio) 
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (data['user_id'], data['name'], data['age'], data['location'], 
-                 data['hobbies'], data['favorite_color'], data['bio'])
-            )
-            await db.commit()
-            return cursor.lastrowid
+            # Check if card exists
+            existing = await self.get_intro_card(data['user_id'])
+            
+            if existing:
+                # Update existing card
+                cursor = await db.execute(
+                    """UPDATE introduction_cards SET 
+                       name=?, age=?, location=?, hobbies=?, favorite_color=?, bio=?,
+                       social_media=?, occupation=?, pronouns=?, timezone=?, fun_fact=?,
+                       card_template=?, background_style=?, is_public=?, updated_at=CURRENT_TIMESTAMP
+                       WHERE user_id=?""",
+                    (data.get('name'), data.get('age'), data.get('location'), 
+                     data.get('hobbies'), data.get('favorite_color', '#7C3AED'), data.get('bio'),
+                     data.get('social_media'), data.get('occupation'), data.get('pronouns'),
+                     data.get('timezone'), data.get('fun_fact'), data.get('card_template', 'default'),
+                     data.get('background_style', 'gradient'), data.get('is_public', True),
+                     data['user_id'])
+                )
+                await db.commit()
+                return existing['id']
+            else:
+                # Insert new card
+                cursor = await db.execute(
+                    """INSERT INTO introduction_cards 
+                       (user_id, guild_id, name, age, location, hobbies, favorite_color, bio,
+                        social_media, occupation, pronouns, timezone, fun_fact, card_template,
+                        background_style, is_public) 
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (data['user_id'], data.get('guild_id'), data.get('name'), data.get('age'), 
+                     data.get('location'), data.get('hobbies'), data.get('favorite_color', '#7C3AED'), 
+                     data.get('bio'), data.get('social_media'), data.get('occupation'), 
+                     data.get('pronouns'), data.get('timezone'), data.get('fun_fact'),
+                     data.get('card_template', 'default'), data.get('background_style', 'gradient'),
+                     data.get('is_public', True))
+                )
+                await db.commit()
+                return cursor.lastrowid
 
     async def get_intro_card(self, user_id: str) -> Optional[Dict[str, Any]]:
         """Get introduction card for a user"""
@@ -328,6 +386,89 @@ class Database:
             async with db.execute('SELECT * FROM introduction_cards WHERE user_id = ?', (user_id,)) as cursor:
                 row = await cursor.fetchone()
                 return dict(row) if row else None
+
+    async def get_intro_cards_by_guild(self, guild_id: str, limit: int = 50) -> List[Dict[str, Any]]:
+        """Get all public introduction cards for a guild"""
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                'SELECT * FROM introduction_cards WHERE guild_id = ? AND is_public = TRUE AND is_approved = TRUE ORDER BY created_at DESC LIMIT ?', 
+                (guild_id, limit)
+            ) as cursor:
+                rows = await cursor.fetchall()
+                return [dict(row) for row in rows]
+
+    async def delete_intro_card(self, user_id: str) -> bool:
+        """Delete introduction card for a user"""
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute('DELETE FROM introduction_cards WHERE user_id = ?', (user_id,))
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def add_card_interaction(self, card_id: int, user_id: str, interaction_type: str, comment_text: str = None) -> bool:
+        """Add interaction to introduction card"""
+        async with aiosqlite.connect(self.db_path) as db:
+            try:
+                cursor = await db.execute(
+                    """INSERT OR REPLACE INTO intro_card_interactions 
+                       (card_id, user_id, interaction_type, comment_text) 
+                       VALUES (?, ?, ?, ?)""",
+                    (card_id, user_id, interaction_type, comment_text)
+                )
+                
+                # Update likes count if it's a like interaction
+                if interaction_type == 'like':
+                    await db.execute(
+                        'UPDATE introduction_cards SET likes_count = (SELECT COUNT(*) FROM intro_card_interactions WHERE card_id = ? AND interaction_type = "like") WHERE id = ?',
+                        (card_id, card_id)
+                    )
+                elif interaction_type == 'view':
+                    await db.execute(
+                        'UPDATE introduction_cards SET views_count = views_count + 1 WHERE id = ?',
+                        (card_id,)
+                    )
+                
+                await db.commit()
+                return True
+            except Exception as e:
+                logging.error(f"Error adding card interaction: {e}")
+                return False
+
+    async def remove_card_interaction(self, card_id: int, user_id: str, interaction_type: str) -> bool:
+        """Remove interaction from introduction card"""
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                'DELETE FROM intro_card_interactions WHERE card_id = ? AND user_id = ? AND interaction_type = ?',
+                (card_id, user_id, interaction_type)
+            )
+            
+            # Update likes count if it's a like interaction
+            if interaction_type == 'like':
+                await db.execute(
+                    'UPDATE introduction_cards SET likes_count = (SELECT COUNT(*) FROM intro_card_interactions WHERE card_id = ? AND interaction_type = "like") WHERE id = ?',
+                    (card_id, card_id)
+                )
+            
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def get_card_interactions(self, card_id: int, interaction_type: str = None) -> List[Dict[str, Any]]:
+        """Get interactions for a card"""
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            if interaction_type:
+                async with db.execute(
+                    'SELECT * FROM intro_card_interactions WHERE card_id = ? AND interaction_type = ? ORDER BY created_at DESC',
+                    (card_id, interaction_type)
+                ) as cursor:
+                    rows = await cursor.fetchall()
+            else:
+                async with db.execute(
+                    'SELECT * FROM intro_card_interactions WHERE card_id = ? ORDER BY created_at DESC',
+                    (card_id,)
+                ) as cursor:
+                    rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
 
     # Transaction methods
     async def add_transaction(self, user_id: str, transaction_type: str, amount: int, description: str) -> int:
@@ -348,6 +489,38 @@ class Database:
             async with db.execute('SELECT * FROM server_settings WHERE guild_id = ?', (guild_id,)) as cursor:
                 row = await cursor.fetchone()
                 return dict(row) if row else None
+    
+    async def save_server_settings(self, settings: Dict[str, Any]) -> bool:
+        """Save server settings"""
+        async with aiosqlite.connect(self.db_path) as db:
+            try:
+                # Check if settings exist
+                existing = await self.get_server_settings(settings['guild_id'])
+                
+                if existing:
+                    # Update existing settings
+                    await db.execute(
+                        """UPDATE server_settings SET 
+                           intro_card_theme=?, intro_card_style=?, intro_card_background_url=?
+                           WHERE guild_id=?""",
+                        (settings.get('intro_card_theme'), settings.get('intro_card_style'), 
+                         settings.get('intro_card_background_url'), settings['guild_id'])
+                    )
+                else:
+                    # Insert new settings
+                    await db.execute(
+                        """INSERT INTO server_settings 
+                           (guild_id, intro_card_theme, intro_card_style, intro_card_background_url) 
+                           VALUES (?, ?, ?, ?)""",
+                        (settings['guild_id'], settings.get('intro_card_theme'), 
+                         settings.get('intro_card_style'), settings.get('intro_card_background_url'))
+                    )
+                
+                await db.commit()
+                return True
+            except Exception as e:
+                logging.error(f"Error saving server settings: {e}")
+                return False
 
     async def update_server_settings(self, guild_id: str, settings: Dict[str, Any]) -> int:
         """Update server settings"""

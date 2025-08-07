@@ -39,17 +39,41 @@ class CanvasUtils:
     async def create_introduction_card(self, user, card_data: Dict[str, Any]) -> bytes:
         """Create an introduction card image"""
         try:
+            from database import database
+            
             # Create base image
             img = Image.new('RGB', (self.width, self.height), color='white')
             draw = ImageDraw.Draw(img)
             
-            # Create gradient background
-            gradient = self._create_gradient_background(card_data.get('favorite_color', '#7C3AED'))
-            img.paste(gradient, (0, 0))
+            # Check if custom background is set
+            guild_id = card_data.get('guild_id')
+            custom_bg_url = None
             
-            # Add subtle pattern overlay
-            pattern_overlay = self._create_pattern_overlay()
-            img.paste(pattern_overlay, (0, 0), pattern_overlay)
+            if guild_id:
+                server_settings = await database.get_server_settings(guild_id)
+                if server_settings:
+                    custom_bg_url = server_settings.get('intro_card_background_url')
+            
+            # Use custom background if available, otherwise use gradient
+            if custom_bg_url:
+                try:
+                    background = await self._create_custom_background(custom_bg_url)
+                    img.paste(background, (0, 0))
+                except Exception as e:
+                    logging.warning(f"Failed to load custom background, using default: {e}")
+                    # Fallback to gradient
+                    background = self._create_gradient_background('#7C3AED')
+                    img.paste(background, (0, 0))
+                    # Add pattern overlay for gradient
+                    pattern_overlay = self._create_pattern_overlay()
+                    img.paste(pattern_overlay, (0, 0), pattern_overlay)
+            else:
+                # Create gradient background (default)
+                background = self._create_gradient_background('#7C3AED')
+                img.paste(background, (0, 0))
+                # Add pattern overlay for gradient
+                pattern_overlay = self._create_pattern_overlay()
+                img.paste(pattern_overlay, (0, 0), pattern_overlay)
             
             # Main content background
             content_x, content_y = 50, 50
@@ -106,14 +130,22 @@ class CanvasUtils:
             
             # Name
             name_font = self.fonts.get('large', ImageFont.load_default())
-            draw.text((text_x, current_y), card_data.get('name', 'Unknown'), fill='#1F2937', font=name_font)
+            name_text = card_data.get('name', 'Unknown')
+            draw.text((text_x, current_y), name_text, fill='#1F2937', font=name_font)
             current_y += 40
             
             # Age and Location
             info_font = self.fonts.get('regular', ImageFont.load_default())
-            age_location = f"{card_data.get('age', 'Unknown')} years old • {card_data.get('location', 'Unknown')}"
-            draw.text((text_x, current_y), age_location, fill='#6B7280', font=info_font)
-            current_y += 40
+            info_parts = []
+            if card_data.get('age'):
+                info_parts.append(f"{card_data['age']} years old")
+            if card_data.get('location'):
+                info_parts.append(card_data['location'])
+            
+            if info_parts:
+                age_location = " • ".join(info_parts)
+                draw.text((text_x, current_y), age_location, fill='#6B7280', font=info_font)
+                current_y += 25
             
             # Bio section
             current_y = content_y + 200
@@ -133,13 +165,14 @@ class CanvasUtils:
             draw.text((content_x + 40, current_y), 'Hobbies & Interests:', fill='#1F2937', font=section_font)
             current_y += 35
             
-            hobbies_lines = self._wrap_text(draw, card_data.get('hobbies', ''), content_width - 80, bio_font)
-            for line in hobbies_lines:
-                draw.text((content_x + 40, current_y), line, fill='#374151', font=bio_font)
-                current_y += 25
+            if card_data.get('hobbies'):
+                hobbies_lines = self._wrap_text(draw, card_data['hobbies'], content_width - 80, bio_font)
+                for line in hobbies_lines:
+                    draw.text((content_x + 40, current_y), line, fill='#374151', font=bio_font)
+                    current_y += 25
             
             # Add decorative elements
-            self._add_decorations(draw, card_data.get('favorite_color', '#7C3AED'))
+            self._add_decorations(draw, '#7C3AED')
             
             # Wonder bot branding
             brand_font = self.fonts.get('regular', ImageFont.load_default())
@@ -190,6 +223,111 @@ class CanvasUtils:
             draw.line([(0, y), (self.width, y)], fill=(r, g, b))
         
         return gradient
+    
+    def _create_solid_background(self, color: str) -> Image.Image:
+        """Create a solid color background"""
+        base_color = self._hex_to_rgb(color)
+        return Image.new('RGB', (self.width, self.height), base_color)
+    
+    def _create_pattern_background(self, color: str) -> Image.Image:
+        """Create a geometric pattern background"""
+        base_color = self._hex_to_rgb(color)
+        dark_color = self._darken_color(color, 0.2)
+        dark_rgb = self._hex_to_rgb(dark_color)
+        
+        pattern = Image.new('RGB', (self.width, self.height), base_color)
+        draw = ImageDraw.Draw(pattern)
+        
+        # Create geometric pattern
+        pattern_size = 40
+        for x in range(0, self.width, pattern_size):
+            for y in range(0, self.height, pattern_size):
+                # Alternate between shapes
+                if (x // pattern_size + y // pattern_size) % 2 == 0:
+                    # Diamond shape
+                    points = [
+                        (x + pattern_size // 2, y),
+                        (x + pattern_size, y + pattern_size // 2),
+                        (x + pattern_size // 2, y + pattern_size),
+                        (x, y + pattern_size // 2)
+                    ]
+                    draw.polygon(points, fill=dark_rgb)
+                else:
+                    # Circle
+                    margin = pattern_size // 4
+                    draw.ellipse(
+                        (x + margin, y + margin, x + pattern_size - margin, y + pattern_size - margin),
+                        fill=dark_rgb
+                    )
+        
+        return pattern
+    
+    async def _create_custom_background(self, image_url: str) -> Image.Image:
+        """Create background from custom image URL"""
+        try:
+            # Download image
+            async with aiohttp.ClientSession() as session:
+                async with session.get(image_url) as response:
+                    if response.status == 200:
+                        image_data = await response.read()
+                        
+                        # Open and process image
+                        bg_image = Image.open(io.BytesIO(image_data)).convert('RGBA')
+                        
+                        # Resize to fit card dimensions while maintaining aspect ratio
+                        bg_image = self._resize_background_image(bg_image)
+                        
+                        # Create final background
+                        background = Image.new('RGB', (self.width, self.height), color='white')
+                        
+                        # Center the background image
+                        bg_width, bg_height = bg_image.size
+                        x = (self.width - bg_width) // 2
+                        y = (self.height - bg_height) // 2
+                        
+                        # Paste background image
+                        if bg_image.mode == 'RGBA':
+                            background.paste(bg_image, (x, y), bg_image)
+                        else:
+                            background.paste(bg_image, (x, y))
+                        
+                        # Add slight overlay to ensure text readability
+                        overlay = Image.new('RGBA', (self.width, self.height), (0, 0, 0, 30))
+                        background.paste(overlay, (0, 0), overlay)
+                        
+                        return background
+                    else:
+                        raise Exception(f"HTTP {response.status}")
+        except Exception as e:
+            logging.error(f"Error loading custom background: {e}")
+            raise
+    
+    def _resize_background_image(self, image: Image.Image) -> Image.Image:
+        """Resize background image to fit card dimensions"""
+        original_width, original_height = image.size
+        target_width, target_height = self.width, self.height
+        
+        # Calculate scaling factor to cover the entire card
+        scale_x = target_width / original_width
+        scale_y = target_height / original_height
+        scale = max(scale_x, scale_y)  # Use max to ensure full coverage
+        
+        # Calculate new dimensions
+        new_width = int(original_width * scale)
+        new_height = int(original_height * scale)
+        
+        # Resize image
+        resized_image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        
+        # If image is larger than target, crop from center
+        if new_width > target_width or new_height > target_height:
+            left = (new_width - target_width) // 2
+            top = (new_height - target_height) // 2
+            right = left + target_width
+            bottom = top + target_height
+            resized_image = resized_image.crop((left, top, right, bottom))
+        
+        return resized_image
     
     def _create_pattern_overlay(self) -> Image.Image:
         """Create a subtle pattern overlay"""

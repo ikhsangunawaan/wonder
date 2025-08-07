@@ -4,6 +4,7 @@ from discord import app_commands
 import asyncio
 import os
 import logging
+import io
 from typing import Dict, Any, Optional, List
 from pathlib import Path
 import sys
@@ -20,6 +21,7 @@ from games_system import games_system
 from wondercoins_drops import init_wondercoins_drops
 from leveling_system import init_leveling_system
 from cooldown_manager import cooldown_manager
+from intro_card_system import init_intro_card_system, IntroCardModal, IntroCardView
 from datetime import datetime
 
 # Configure logging
@@ -62,6 +64,7 @@ class WonderBot(commands.Bot):
         self.giveaway_system = None
         self.leveling_system = None
         self.drop_system = None
+        self.intro_card_system = None
         
     async def setup_hook(self):
         """Setup hook called when bot is starting"""
@@ -76,6 +79,15 @@ class WonderBot(commands.Bot):
         self.giveaway_system = init_giveaway_system(self)
         self.leveling_system = init_leveling_system(self)
         self.drop_system = init_wondercoins_drops(self)
+        self.intro_card_system = init_intro_card_system(self)
+        
+        # Add intro card slash commands to tree
+        self.tree.add_command(intro_create)
+        self.tree.add_command(intro_edit)
+        self.tree.add_command(intro_view)
+        self.tree.add_command(intro_privacy)
+        self.tree.add_command(intro_background)
+        self.tree.add_command(intro_delete)
         
         # Sync slash commands
         try:
@@ -1008,6 +1020,400 @@ async def list_drop_channels(ctx: commands.Context):
     
     await ctx.send(embed=embed)
 
+# Introduction Card Commands (Slash only)
+@app_commands.command(name='intro-create', description='Create your introduction card')
+async def intro_create(interaction: discord.Interaction):
+    """Create an introduction card"""
+    try:
+        # Check if user already has a card
+        existing_card = await database.get_intro_card(str(interaction.user.id))
+        
+        if existing_card:
+            embed = discord.Embed(
+                title="❌ Card Already Exists",
+                description="You already have an introduction card! Use `/intro-edit` to modify it or `/intro-view` to see it.",
+                color=0xF59E0B
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+        
+        # Show modal for card creation
+        modal = IntroCardModal()
+        await interaction.response.send_modal(modal)
+        
+    except Exception as e:
+        logging.error(f"Error creating intro card: {e}")
+        await interaction.response.send_message("❌ An error occurred while creating your card.", ephemeral=True)
+
+@app_commands.command(name='intro-edit', description='Edit your introduction card')
+async def intro_edit(interaction: discord.Interaction):
+    """Edit an existing introduction card"""
+    try:
+        # Get existing card
+        existing_card = await database.get_intro_card(str(interaction.user.id))
+        
+        if not existing_card:
+            embed = discord.Embed(
+                title="❌ No Card Found",
+                description="You don't have an introduction card yet! Use `/intro-create` to make one.",
+                color=0xF59E0B
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+        
+        # Show modal for card editing
+        modal = IntroCardModal(existing_card)
+        await interaction.response.send_modal(modal)
+        
+    except Exception as e:
+        logging.error(f"Error editing intro card: {e}")
+        await interaction.response.send_message("❌ An error occurred while editing your card.", ephemeral=True)
+
+@app_commands.command(name='intro-view', description='View an introduction card')
+@app_commands.describe(user='The user whose card you want to view (optional - defaults to yourself)')
+async def intro_view(interaction: discord.Interaction, user: discord.Member = None):
+    """View an introduction card"""
+    try:
+        target_user = user or interaction.user
+        
+        # Get card data
+        card_data = await database.get_intro_card(str(target_user.id))
+        
+        if not card_data:
+            if target_user == interaction.user:
+                embed = discord.Embed(
+                    title="❌ No Card Found",
+                    description="You don't have an introduction card yet! Use `/intro-create` to make one.",
+                    color=0xF59E0B
+                )
+            else:
+                embed = discord.Embed(
+                    title="❌ No Card Found",
+                    description=f"{target_user.display_name} doesn't have an introduction card yet.",
+                    color=0xF59E0B
+                )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+        
+        # Check if card is public or if user is viewing their own card
+        if not card_data.get('is_public', True) and target_user != interaction.user:
+            embed = discord.Embed(
+                title="🔒 Private Card",
+                description=f"{target_user.display_name}'s introduction card is set to private.",
+                color=0xF59E0B
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+        
+        await interaction.response.defer()
+        
+        # Generate card image
+        try:
+            card_image = await interaction.client.intro_card_system.generate_card_image(target_user, card_data)
+            
+            # Create embed with card info
+            embed = await interaction.client.intro_card_system.create_card_embed(card_data, target_user)
+            
+            # Create interactive view
+            view = IntroCardView(card_data, str(interaction.user.id))
+            
+            # Send card with image and interactive buttons
+            file = discord.File(io.BytesIO(card_image), filename=f"intro_card_{target_user.id}.png")
+            embed.set_image(url=f"attachment://intro_card_{target_user.id}.png")
+            
+            await interaction.followup.send(embed=embed, file=file, view=view)
+            
+        except Exception as e:
+            logging.error(f"Error generating card image: {e}")
+            # Fallback to text-only embed
+            embed = await interaction.client.intro_card_system.create_card_embed(card_data, target_user)
+            view = IntroCardView(card_data, str(interaction.user.id))
+            await interaction.followup.send(embed=embed, view=view)
+        
+    except Exception as e:
+        logging.error(f"Error viewing intro card: {e}")
+        await interaction.response.send_message("❌ An error occurred while viewing the card.", ephemeral=True)
+
+
+
+
+
+@app_commands.command(name='intro-privacy', description='Toggle your introduction card privacy')
+async def intro_privacy(interaction: discord.Interaction):
+    """Toggle introduction card privacy"""
+    try:
+        # Get existing card
+        card_data = await database.get_intro_card(str(interaction.user.id))
+        
+        if not card_data:
+            embed = discord.Embed(
+                title="❌ No Card Found",
+                description="You don't have an introduction card yet! Use `/intro-create` to make one.",
+                color=0xF59E0B
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+        
+        # Toggle privacy
+        current_privacy = card_data.get('is_public', True)
+        new_privacy = not current_privacy
+        
+        card_data['is_public'] = new_privacy
+        await database.save_intro_card(card_data)
+        
+        privacy_status = "Public" if new_privacy else "Private"
+        privacy_emoji = "🌐" if new_privacy else "🔒"
+        
+        embed = discord.Embed(
+            title=f"{privacy_emoji} Privacy Updated",
+            description=f"Your introduction card is now **{privacy_status}**.",
+            color=0x10B981 if new_privacy else 0xF59E0B
+        )
+        
+        if new_privacy:
+            embed.add_field(name="Public Card", value="✅ Other members can view your card\n✅ Appears in server gallery\n✅ Can receive likes and interactions", inline=False)
+        else:
+            embed.add_field(name="Private Card", value="🔒 Only you can view your card\n🔒 Hidden from server gallery\n🔒 No public interactions", inline=False)
+        
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        
+    except Exception as e:
+        logging.error(f"Error toggling intro card privacy: {e}")
+        await interaction.response.send_message("❌ An error occurred while updating privacy settings.", ephemeral=True)
+
+@app_commands.command(name='intro-background', description='🔒 Bot Owner: Set custom background image for introduction cards')
+@app_commands.describe(image='Upload a background image (JPG/PNG)')
+async def intro_background(interaction: discord.Interaction, image: discord.Attachment = None):
+    """Bot owner only: Set custom background image for introduction cards"""
+    try:
+        # Check if user is bot owner
+        app_info = await interaction.client.application_info()
+        if interaction.user.id != app_info.owner.id:
+            embed = discord.Embed(
+                title="🔒 Owner Only Command",
+                description="This command can only be used by the bot owner.",
+                color=0xF59E0B
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+        
+        await interaction.response.defer(ephemeral=True)
+        
+        # Get current server settings
+        server_settings = await database.get_server_settings(str(interaction.guild.id))
+        if not server_settings:
+            server_settings = {
+                'guild_id': str(interaction.guild.id),
+                'intro_card_theme': '#7C3AED',
+                'intro_card_style': 'gradient'
+            }
+        
+        if image is None:
+            # Show current background and options to remove
+            class BackgroundManagementView(discord.ui.View):
+                def __init__(self, settings):
+                    super().__init__(timeout=300)
+                    self.settings = settings
+                
+                @discord.ui.button(label="🗑️ Remove Custom Background", style=discord.ButtonStyle.danger)
+                async def remove_background(self, interaction: discord.Interaction, button: discord.ui.Button):
+                    """Remove custom background"""
+                    self.settings['intro_card_background_url'] = None
+                    await database.save_server_settings(self.settings)
+                    
+                    embed = discord.Embed(
+                        title="✅ Background Removed",
+                        description="Custom background has been removed. Cards will now use the default gradient background.",
+                        color=0x10B981
+                    )
+                    await interaction.response.edit_message(embed=embed, view=None)
+            
+            current_bg = server_settings.get('intro_card_background_url')
+            embed = discord.Embed(
+                title="🖼️ Introduction Card Background Management",
+                description="Manage the background image for introduction cards in this server.",
+                color=0x7C3AED
+            )
+            
+            if current_bg:
+                embed.add_field(
+                    name="Current Background", 
+                    value="✅ Custom background image is set", 
+                    inline=False
+                )
+                embed.set_image(url=current_bg)
+                view = BackgroundManagementView(server_settings)
+            else:
+                embed.add_field(
+                    name="Current Background", 
+                    value="🌈 Default gradient background", 
+                    inline=False
+                )
+                view = None
+            
+            embed.add_field(
+                name="How to Set Background",
+                value="Use `/intro-background` with an image attachment to set a custom background.\n"
+                      "Supported formats: JPG, PNG\n"
+                      "Recommended size: 800x600 pixels",
+                inline=False
+            )
+            
+            await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+            return
+        
+        # Validate image
+        if not image.content_type or not image.content_type.startswith('image/'):
+            embed = discord.Embed(
+                title="❌ Invalid File Type",
+                description="Please upload a valid image file (JPG or PNG).",
+                color=0xF59E0B
+            )
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            return
+        
+        # Check file size (max 8MB)
+        if image.size > 8 * 1024 * 1024:
+            embed = discord.Embed(
+                title="❌ File Too Large",
+                description="Image must be smaller than 8MB.",
+                color=0xF59E0B
+            )
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            return
+        
+        # Save the image URL to server settings
+        server_settings['intro_card_background_url'] = image.url
+        success = await database.save_server_settings(server_settings)
+        
+        if success:
+            embed = discord.Embed(
+                title="✅ Background Updated Successfully",
+                description="The custom background image has been set for introduction cards.",
+                color=0x10B981
+            )
+            embed.add_field(
+                name="New Background Preview",
+                value="All new and updated introduction cards will use this background.",
+                inline=False
+            )
+            embed.set_image(url=image.url)
+            
+            # Add button to test the background
+            class TestView(discord.ui.View):
+                def __init__(self):
+                    super().__init__(timeout=300)
+                
+                @discord.ui.button(label="🎨 Preview on Sample Card", style=discord.ButtonStyle.primary)
+                async def preview_background(self, interaction: discord.Interaction, button: discord.ui.Button):
+                    """Generate a sample card with the new background"""
+                    await interaction.response.defer(ephemeral=True)
+                    
+                    try:
+                        # Create sample card data
+                        sample_data = {
+                            'name': 'Sample User',
+                            'age': 25,
+                            'location': 'Wonderland',
+                            'bio': 'This is a sample introduction card to preview the new background!',
+                            'hobbies': 'Testing, Previewing, and Being Awesome',
+                            'favorite_color': '#7C3AED',
+                            'background_style': 'gradient'
+                        }
+                        
+                        # Generate preview card
+                        card_image = await interaction.client.intro_card_system.generate_card_image(
+                            interaction.user, sample_data
+                        )
+                        
+                        file = discord.File(io.BytesIO(card_image), filename="background_preview.png")
+                        embed = discord.Embed(
+                            title="🎨 Background Preview",
+                            description="Here's how the new background looks on an introduction card:",
+                            color=0x7C3AED
+                        )
+                        embed.set_image(url="attachment://background_preview.png")
+                        
+                        await interaction.followup.send(embed=embed, file=file, ephemeral=True)
+                        
+                    except Exception as e:
+                        logging.error(f"Error generating background preview: {e}")
+                        await interaction.followup.send("❌ Error generating preview. The background is still saved successfully.", ephemeral=True)
+            
+            view = TestView()
+            await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+        else:
+            embed = discord.Embed(
+                title="❌ Error",
+                description="There was an error saving the background image. Please try again.",
+                color=0xEF4444
+            )
+            await interaction.followup.send(embed=embed, ephemeral=True)
+        
+    except Exception as e:
+        logging.error(f"Error setting intro background: {e}")
+        await interaction.followup.send("❌ An error occurred while setting the background.", ephemeral=True)
+
+@app_commands.command(name='intro-delete', description='Delete your introduction card')
+async def intro_delete(interaction: discord.Interaction):
+    """Delete introduction card"""
+    try:
+        # Get existing card
+        card_data = await database.get_intro_card(str(interaction.user.id))
+        
+        if not card_data:
+            embed = discord.Embed(
+                title="❌ No Card Found",
+                description="You don't have an introduction card to delete.",
+                color=0xF59E0B
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+        
+        # Confirmation view
+        class ConfirmDeleteView(discord.ui.View):
+            def __init__(self):
+                super().__init__(timeout=60)
+                
+            @discord.ui.button(label="✅ Yes, Delete", style=discord.ButtonStyle.danger)
+            async def confirm_delete(self, interaction: discord.Interaction, button: discord.ui.Button):
+                success = await database.delete_intro_card(str(interaction.user.id))
+                if success:
+                    embed = discord.Embed(
+                        title="✅ Card Deleted",
+                        description="Your introduction card has been successfully deleted.",
+                        color=0x10B981
+                    )
+                else:
+                    embed = discord.Embed(
+                        title="❌ Error",
+                        description="There was an error deleting your card. Please try again.",
+                        color=0xEF4444
+                    )
+                await interaction.response.edit_message(embed=embed, view=None)
+                
+            @discord.ui.button(label="❌ Cancel", style=discord.ButtonStyle.secondary)
+            async def cancel_delete(self, interaction: discord.Interaction, button: discord.ui.Button):
+                embed = discord.Embed(
+                    title="❌ Cancelled",
+                    description="Card deletion cancelled.",
+                    color=0x6B7280
+                )
+                await interaction.response.edit_message(embed=embed, view=None)
+        
+        embed = discord.Embed(
+            title="⚠️ Confirm Deletion",
+            description="Are you sure you want to delete your introduction card?\n**This action cannot be undone!**",
+            color=0xF59E0B
+        )
+        view = ConfirmDeleteView()
+        
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        
+    except Exception as e:
+        logging.error(f"Error deleting intro card: {e}")
+        await interaction.response.send_message("❌ An error occurred while deleting your card.", ephemeral=True)
+
 # Help Command (Hybrid)
 @commands.hybrid_command(name='help')
 async def help_command(ctx: commands.Context):
@@ -1049,6 +1455,23 @@ async def help_command(ctx: commands.Context):
         name="📊 Leveling",
         value="`w.rank [@user]` - View rank\n"
               "Gain XP by chatting and being in voice!",
+        inline=True
+    )
+    
+    embed.add_field(
+        name="👋 Introduction Cards",
+        value="`/intro-create` - Create your intro card\n"
+              "`/intro-view [@user]` - View intro cards\n"
+              "`/intro-edit` - Edit your card info\n"
+              "`/intro-privacy` - Toggle card privacy\n"
+              "`/intro-delete` - Delete your card",
+        inline=True
+    )
+    
+    embed.add_field(
+        name="🎨 Owner Commands",
+        value="`/intro-background` - 🔒 Set custom background\n"
+              "Upload image to customize card backgrounds",
         inline=True
     )
     
