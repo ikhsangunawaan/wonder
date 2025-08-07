@@ -248,10 +248,16 @@ class WonderBot(commands.Bot):
 
 # Economy Commands (Hybrid: both prefix and slash)
 @commands.hybrid_command(name='balance', aliases=['bal'])
-@app_commands.describe(user='User to check balance for (optional)')
-async def balance(ctx: commands.Context, user: discord.Member = None):
+@app_commands.describe(user='User to check balance for (mention, ID, or username - optional)')
+async def balance(ctx: commands.Context, user: str = None):
     """Check your balance or another user's balance"""
-    target_user = user or ctx.author
+    if user:
+        target_user = parse_user_mention_or_id(user, ctx.guild)
+        if not target_user:
+            await send_command_error(ctx, "member_not_found", "balance", f"User '{user}' not found. Use mention, ID, or username.")
+            return
+    else:
+        target_user = ctx.author
     
     user_data = await ctx.bot.database.get_user(str(target_user.id))
     if not user_data:
@@ -588,10 +594,16 @@ async def slots(ctx: commands.Context, bet_amount: int):
     # No need to send another message if animation was shown
 
 @commands.hybrid_command(name='gamestats')
-@app_commands.describe(user='User to check gambling stats for (optional)')
-async def gamestats(ctx: commands.Context, user: discord.Member = None):
+@app_commands.describe(user='User to check gambling stats for (mention, ID, or username - optional)')
+async def gamestats(ctx: commands.Context, user: str = None):
     """View gambling statistics"""
-    target_user = user or ctx.author
+    if user:
+        target_user = parse_user_mention_or_id(user, ctx.guild)
+        if not target_user:
+            await send_command_error(ctx, "member_not_found", "gamestats", f"User '{user}' not found. Use mention, ID, or username.")
+            return
+    else:
+        target_user = ctx.author
     embed = await ctx.bot.games_system.create_gambling_stats_embed(str(target_user.id), target_user.display_name)
     await ctx.send(embed=embed)
 
@@ -643,10 +655,16 @@ async def use_item(ctx: commands.Context, item_id: str):
 
 # Leveling Commands
 @commands.hybrid_command(name='rank')
-@app_commands.describe(user='User to check rank for (optional)')
-async def rank(ctx: commands.Context, user: discord.Member = None):
+@app_commands.describe(user='User to check rank for (mention, ID, or username - optional)')
+async def rank(ctx: commands.Context, user: str = None):
     """View comprehensive rank information across all categories"""
-    target_user = user or ctx.author
+    if user:
+        target_user = parse_user_mention_or_id(user, ctx.guild)
+        if not target_user:
+            await send_command_error(ctx, "member_not_found", "rank", f"User '{user}' not found. Use mention, ID, or username.")
+            return
+    else:
+        target_user = ctx.author
     rank_info = await ctx.bot.leveling_system.get_user_rank(str(target_user.id))
     
     if not rank_info:
@@ -870,6 +888,412 @@ async def prestige_info(ctx: commands.Context):
     )
     
     embed.set_footer(text="Use /rank to check your prestige eligibility")
+    
+    await ctx.send(embed=embed)
+
+# =============================================================================
+# ADMIN LEVELING MANAGEMENT COMMANDS
+# =============================================================================
+
+@commands.hybrid_command(name='toggle-category')
+@commands.has_permissions(administrator=True)
+@app_commands.describe(category='Category to toggle (text/voice/role/overall)', enabled='Enable or disable the category')
+async def toggle_category(ctx: commands.Context, category: str, enabled: bool):
+    """Enable or disable a leveling category (Admin only)"""
+    valid_categories = ['text', 'voice', 'role', 'overall']
+    
+    if category.lower() not in valid_categories:
+        await send_command_error(ctx, "bad_argument", "toggle-category", f"Category must be one of: {', '.join(valid_categories)}")
+        return
+    
+    category = category.lower()
+    
+    # Get current server settings
+    server_settings = await database.get_server_settings(str(ctx.guild.id))
+    if not server_settings:
+        server_settings = {'guild_id': str(ctx.guild.id)}
+    
+    # Update category setting
+    if 'leveling_categories' not in server_settings:
+        server_settings['leveling_categories'] = {
+            'text': True,
+            'voice': True,
+            'role': True,
+            'overall': True
+        }
+    
+    server_settings['leveling_categories'][category] = enabled
+    success = await database.save_server_settings(server_settings)
+    
+    if success:
+        status = "enabled" if enabled else "disabled"
+        embed = discord.Embed(
+            title=f"⚙️ Category {status.title()}",
+            description=f"**{category.title()}** leveling category has been **{status}**.",
+            color=int(config.colors['success' if enabled else 'warning'].replace('#', ''), 16)
+        )
+        
+        if enabled:
+            embed.add_field(
+                name="✅ Category Active",
+                value=f"Users will now earn XP in the **{category}** category.",
+                inline=False
+            )
+        else:
+            embed.add_field(
+                name="⏸️ Category Paused",
+                value=f"Users will no longer earn XP in the **{category}** category.\nExisting progress is preserved.",
+                inline=False
+            )
+    else:
+        embed = discord.Embed(
+            title="❌ Error",
+            description="Failed to update category setting. Please try again.",
+            color=int(config.colors['error'].replace('#', ''), 16)
+        )
+    
+    await ctx.send(embed=embed)
+
+@commands.hybrid_command(name='set-user-xp')
+@commands.has_permissions(administrator=True)
+@app_commands.describe(user='User to modify (mention, ID, or username)', category='XP category (text/voice/role/overall)', amount='XP amount to set')
+async def set_user_xp(ctx: commands.Context, user: str, category: str, amount: int):
+    """Set user's XP in a specific category (Admin only)"""
+    valid_categories = ['text', 'voice', 'role', 'overall']
+    
+    if category.lower() not in valid_categories:
+        await send_command_error(ctx, "bad_argument", "set-user-xp", f"Category must be one of: {', '.join(valid_categories)}")
+        return
+    
+    target_user = parse_user_mention_or_id(user, ctx.guild)
+    if not target_user:
+        await send_command_error(ctx, "member_not_found", "set-user-xp", f"User '{user}' not found. Use mention, ID, or username.")
+        return
+    
+    if amount < 0:
+        await send_command_error(ctx, "bad_argument", "set-user-xp", "XP amount cannot be negative.")
+        return
+    
+    category = category.lower()
+    
+    # Set user XP
+    user_data = await database.get_user(str(target_user.id))
+    if not user_data:
+        user_data = {'user_id': str(target_user.id)}
+    
+    old_xp = user_data.get(f'{category}_xp', 0)
+    user_data[f'{category}_xp'] = amount
+    
+    # Calculate new level
+    from leveling_system import LevelingSystem
+    level_system = LevelingSystem(None)
+    new_level = level_system.level_formula['calculateLevel'](amount)
+    old_level = level_system.level_formula['calculateLevel'](old_xp)
+    
+    success = await database.save_user(user_data)
+    
+    if success:
+        embed = discord.Embed(
+            title="⚙️ User XP Updated",
+            description=f"**{target_user.display_name}**'s {category} XP has been set.",
+            color=int(config.colors['success'].replace('#', ''), 16)
+        )
+        
+        embed.add_field(
+            name="📊 Changes",
+            value=f"**Category:** {category.title()}\n"
+                  f"**Old XP:** {old_xp:,}\n"
+                  f"**New XP:** {amount:,}\n"
+                  f"**Old Level:** {old_level}\n"
+                  f"**New Level:** {new_level}",
+            inline=True
+        )
+        
+        if new_level != old_level:
+            embed.add_field(
+                name="🎉 Level Change",
+                value=f"Level changed from **{old_level}** to **{new_level}**",
+                inline=True
+            )
+    else:
+        embed = discord.Embed(
+            title="❌ Error",
+            description="Failed to update user XP. Please try again.",
+            color=int(config.colors['error'].replace('#', ''), 16)
+        )
+    
+    await ctx.send(embed=embed)
+
+@commands.hybrid_command(name='add-user-xp')
+@commands.has_permissions(administrator=True)
+@app_commands.describe(user='User to modify (mention, ID, or username)', category='XP category (text/voice/role/overall)', amount='XP amount to add')
+async def add_user_xp(ctx: commands.Context, user: str, category: str, amount: int):
+    """Add XP to user in a specific category (Admin only)"""
+    valid_categories = ['text', 'voice', 'role', 'overall']
+    
+    if category.lower() not in valid_categories:
+        await send_command_error(ctx, "bad_argument", "add-user-xp", f"Category must be one of: {', '.join(valid_categories)}")
+        return
+    
+    target_user = parse_user_mention_or_id(user, ctx.guild)
+    if not target_user:
+        await send_command_error(ctx, "member_not_found", "add-user-xp", f"User '{user}' not found. Use mention, ID, or username.")
+        return
+    
+    category = category.lower()
+    
+    # Add user XP
+    user_data = await database.get_user(str(target_user.id))
+    if not user_data:
+        user_data = {'user_id': str(target_user.id)}
+    
+    old_xp = user_data.get(f'{category}_xp', 0)
+    new_xp = max(0, old_xp + amount)  # Ensure XP doesn't go negative
+    user_data[f'{category}_xp'] = new_xp
+    
+    # Calculate levels
+    from leveling_system import LevelingSystem
+    level_system = LevelingSystem(None)
+    new_level = level_system.level_formula['calculateLevel'](new_xp)
+    old_level = level_system.level_formula['calculateLevel'](old_xp)
+    
+    success = await database.save_user(user_data)
+    
+    if success:
+        embed = discord.Embed(
+            title="⚙️ User XP Modified",
+            description=f"**{target_user.display_name}**'s {category} XP has been modified.",
+            color=int(config.colors['success'].replace('#', ''), 16)
+        )
+        
+        embed.add_field(
+            name="📊 Changes",
+            value=f"**Category:** {category.title()}\n"
+                  f"**XP Change:** {amount:+,}\n"
+                  f"**Old XP:** {old_xp:,}\n"
+                  f"**New XP:** {new_xp:,}\n"
+                  f"**Level:** {old_level} → {new_level}",
+            inline=True
+        )
+        
+        if new_level != old_level:
+            level_change = "increased" if new_level > old_level else "decreased"
+            embed.add_field(
+                name=f"🎉 Level {level_change.title()}",
+                value=f"Level {level_change} by **{abs(new_level - old_level)}**",
+                inline=True
+            )
+    else:
+        embed = discord.Embed(
+            title="❌ Error",
+            description="Failed to modify user XP. Please try again.",
+            color=int(config.colors['error'].replace('#', ''), 16)
+        )
+    
+    await ctx.send(embed=embed)
+
+@commands.hybrid_command(name='reset-user-xp')
+@commands.has_permissions(administrator=True)
+@app_commands.describe(user='User to reset (mention, ID, or username)', category='XP category to reset (text/voice/role/overall/all)')
+async def reset_user_xp(ctx: commands.Context, user: str, category: str = 'all'):
+    """Reset user's XP in specific category or all categories (Admin only)"""
+    valid_categories = ['text', 'voice', 'role', 'overall', 'all']
+    
+    if category.lower() not in valid_categories:
+        await send_command_error(ctx, "bad_argument", "reset-user-xp", f"Category must be one of: {', '.join(valid_categories)}")
+        return
+    
+    target_user = parse_user_mention_or_id(user, ctx.guild)
+    if not target_user:
+        await send_command_error(ctx, "member_not_found", "reset-user-xp", f"User '{user}' not found. Use mention, ID, or username.")
+        return
+    
+    category = category.lower()
+    
+    # Confirmation for reset
+    class ConfirmResetView(discord.ui.View):
+        def __init__(self):
+            super().__init__(timeout=60)
+            
+        @discord.ui.button(label="✅ Confirm Reset", style=discord.ButtonStyle.danger)
+        async def confirm_reset(self, interaction: discord.Interaction, button: discord.ui.Button):
+            user_data = await database.get_user(str(target_user.id))
+            if not user_data:
+                user_data = {'user_id': str(target_user.id)}
+            
+            reset_categories = ['text', 'voice', 'role', 'overall'] if category == 'all' else [category]
+            
+            for cat in reset_categories:
+                user_data[f'{cat}_xp'] = 0
+            
+            success = await database.save_user(user_data)
+            
+            if success:
+                embed = discord.Embed(
+                    title="✅ XP Reset Complete",
+                    description=f"**{target_user.display_name}**'s XP has been reset.",
+                    color=int(config.colors['success'].replace('#', ''), 16)
+                )
+                
+                if category == 'all':
+                    embed.add_field(
+                        name="🔄 Reset Categories",
+                        value="All categories (Text, Voice, Role, Overall) reset to 0 XP",
+                        inline=False
+                    )
+                else:
+                    embed.add_field(
+                        name="🔄 Reset Category",
+                        value=f"**{category.title()}** category reset to 0 XP",
+                        inline=False
+                    )
+            else:
+                embed = discord.Embed(
+                    title="❌ Error",
+                    description="Failed to reset user XP. Please try again.",
+                    color=int(config.colors['error'].replace('#', ''), 16)
+                )
+            
+            await interaction.response.edit_message(embed=embed, view=None)
+            
+        @discord.ui.button(label="❌ Cancel", style=discord.ButtonStyle.secondary)
+        async def cancel_reset(self, interaction: discord.Interaction, button: discord.ui.Button):
+            embed = discord.Embed(
+                title="❌ Reset Cancelled",
+                description="XP reset has been cancelled.",
+                color=int(config.colors['warning'].replace('#', ''), 16)
+            )
+            await interaction.response.edit_message(embed=embed, view=None)
+    
+    embed = discord.Embed(
+        title="⚠️ Confirm XP Reset",
+        description=f"Are you sure you want to reset **{target_user.display_name}**'s XP?",
+        color=int(config.colors['warning'].replace('#', ''), 16)
+    )
+    
+    if category == 'all':
+        embed.add_field(
+            name="🔄 Reset Scope",
+            value="**ALL CATEGORIES** will be reset to 0 XP\n(Text, Voice, Role, Overall)",
+            inline=False
+        )
+    else:
+        embed.add_field(
+            name="🔄 Reset Scope",
+            value=f"**{category.title()}** category will be reset to 0 XP",
+            inline=False
+        )
+    
+    embed.add_field(
+        name="⚠️ Warning",
+        value="This action cannot be undone!",
+        inline=False
+    )
+    
+    view = ConfirmResetView()
+    await ctx.send(embed=embed, view=view)
+
+@commands.hybrid_command(name='set-user-currency')
+@commands.has_permissions(administrator=True)
+@app_commands.describe(user='User to modify (mention, ID, or username)', amount='Currency amount to set')
+async def set_user_currency(ctx: commands.Context, user: str, amount: int):
+    """Set user's currency balance (Admin only)"""
+    target_user = parse_user_mention_or_id(user, ctx.guild)
+    if not target_user:
+        await send_command_error(ctx, "member_not_found", "set-user-currency", f"User '{user}' not found. Use mention, ID, or username.")
+        return
+    
+    if amount < 0:
+        await send_command_error(ctx, "bad_argument", "set-user-currency", "Currency amount cannot be negative.")
+        return
+    
+    # Set user currency
+    user_data = await database.get_user(str(target_user.id))
+    if not user_data:
+        user_data = {'user_id': str(target_user.id)}
+    
+    old_balance = user_data.get('balance', 0)
+    user_data['balance'] = amount
+    
+    success = await database.save_user(user_data)
+    
+    if success:
+        embed = discord.Embed(
+            title="💰 Currency Updated",
+            description=f"**{target_user.display_name}**'s balance has been set.",
+            color=int(config.colors['success'].replace('#', ''), 16)
+        )
+        
+        embed.add_field(
+            name="💸 Changes",
+            value=f"**Old Balance:** {old_balance:,} {config.currency['symbol']}\n"
+                  f"**New Balance:** {amount:,} {config.currency['symbol']}\n"
+                  f"**Difference:** {amount - old_balance:+,} {config.currency['symbol']}",
+            inline=True
+        )
+    else:
+        embed = discord.Embed(
+            title="❌ Error",
+            description="Failed to update user currency. Please try again.",
+            color=int(config.colors['error'].replace('#', ''), 16)
+        )
+    
+    await ctx.send(embed=embed)
+
+@commands.hybrid_command(name='add-user-currency')
+@commands.has_permissions(administrator=True)
+@app_commands.describe(user='User to modify (mention, ID, or username)', amount='Currency amount to add (use negative to subtract)')
+async def add_user_currency(ctx: commands.Context, user: str, amount: int):
+    """Add currency to user's balance (Admin only)"""
+    target_user = parse_user_mention_or_id(user, ctx.guild)
+    if not target_user:
+        await send_command_error(ctx, "member_not_found", "add-user-currency", f"User '{user}' not found. Use mention, ID, or username.")
+        return
+    
+    # Add user currency
+    user_data = await database.get_user(str(target_user.id))
+    if not user_data:
+        user_data = {'user_id': str(target_user.id)}
+    
+    old_balance = user_data.get('balance', 0)
+    new_balance = max(0, old_balance + amount)  # Ensure balance doesn't go negative
+    user_data['balance'] = new_balance
+    
+    success = await database.save_user(user_data)
+    
+    if success:
+        embed = discord.Embed(
+            title="💰 Currency Modified",
+            description=f"**{target_user.display_name}**'s balance has been modified.",
+            color=int(config.colors['success'].replace('#', ''), 16)
+        )
+        
+        embed.add_field(
+            name="💸 Changes",
+            value=f"**Change:** {amount:+,} {config.currency['symbol']}\n"
+                  f"**Old Balance:** {old_balance:,} {config.currency['symbol']}\n"
+                  f"**New Balance:** {new_balance:,} {config.currency['symbol']}",
+            inline=True
+        )
+        
+        if amount > 0:
+            embed.add_field(
+                name="💰 Added",
+                value=f"Added {amount:,} {config.currency['symbol']}",
+                inline=True
+            )
+        elif amount < 0:
+            embed.add_field(
+                name="💸 Deducted",
+                value=f"Deducted {abs(amount):,} {config.currency['symbol']}",
+                inline=True
+            )
+    else:
+        embed = discord.Embed(
+            title="❌ Error",
+            description="Failed to modify user currency. Please try again.",
+            color=int(config.colors['error'].replace('#', ''), 16)
+        )
     
     await ctx.send(embed=embed)
 
@@ -1171,10 +1595,16 @@ async def quick_giveaway(ctx: commands.Context, duration: str, winners: int, *, 
 # Admin Commands (Hybrid: both prefix and slash)
 @commands.hybrid_command(name='adddrops')
 @commands.has_permissions(manage_guild=True)
-@app_commands.describe(channel='Channel to add to drop system (optional, defaults to current)')
-async def add_drop_channel(ctx: commands.Context, channel: discord.TextChannel = None):
+@app_commands.describe(channel='Channel to add to drop system (mention, ID, or name - optional, defaults to current)')
+async def add_drop_channel(ctx: commands.Context, channel: str = None):
     """Add a channel to the wonder drop system (Admin only)"""
-    target_channel = channel or ctx.channel
+    if channel:
+        target_channel = parse_channel_mention_or_id(channel, ctx.guild)
+        if not target_channel:
+            await send_command_error(ctx, "channel_not_found", "adddrops", f"Channel '{channel}' not found. Use mention, ID, or name.")
+            return
+    else:
+        target_channel = ctx.channel
     
     result = await ctx.bot.drop_system.add_drop_channel(
         str(ctx.guild.id), str(target_channel.id), str(ctx.author.id)
@@ -1192,10 +1622,16 @@ async def add_drop_channel(ctx: commands.Context, channel: discord.TextChannel =
 
 @commands.hybrid_command(name='removedrops')
 @commands.has_permissions(manage_guild=True)
-@app_commands.describe(channel='Channel to remove from drop system (optional, defaults to current)')
-async def remove_drop_channel(ctx: commands.Context, channel: discord.TextChannel = None):
+@app_commands.describe(channel='Channel to remove from drop system (mention, ID, or name - optional, defaults to current)')
+async def remove_drop_channel(ctx: commands.Context, channel: str = None):
     """Remove a channel from the wonder drop system (Admin only)"""
-    target_channel = channel or ctx.channel
+    if channel:
+        target_channel = parse_channel_mention_or_id(channel, ctx.guild)
+        if not target_channel:
+            await send_command_error(ctx, "channel_not_found", "removedrops", f"Channel '{channel}' not found. Use mention, ID, or name.")
+            return
+    else:
+        target_channel = ctx.channel
     
     result = await ctx.bot.drop_system.remove_drop_channel(
         str(ctx.guild.id), str(target_channel.id)
@@ -1237,8 +1673,8 @@ async def force_drop(ctx: commands.Context, amount: int = None, rarity: str = No
 
 @commands.hybrid_command(name='configdrops')
 @commands.has_permissions(administrator=True)
-@app_commands.describe(channel='Channel to configure', setting='Setting to change (rarity_mult, amount_mult, frequency, rarities)', value='New value for the setting')
-async def configure_drops(ctx: commands.Context, channel: discord.TextChannel, setting: str = None, value: str = None):
+@app_commands.describe(channel='Channel to configure (mention, ID, or name)', setting='Setting to change (rarity_mult, amount_mult, frequency, rarities)', value='New value for the setting')
+async def configure_drops(ctx: commands.Context, channel: str, setting: str = None, value: str = None):
     """Configure advanced drop settings for a channel (Admin only)
     
     Settings:
@@ -1247,18 +1683,23 @@ async def configure_drops(ctx: commands.Context, channel: discord.TextChannel, s
     - frequency: Drop frequency modifier (0.1-10.0)
     - rarities: Allowed rarities (comma separated: common,rare,epic,legendary)
     """
+    target_channel = parse_channel_mention_or_id(channel, ctx.guild)
+    if not target_channel:
+        await send_command_error(ctx, "channel_not_found", "configdrops", f"Channel '{channel}' not found. Use mention, ID, or name.")
+        return
+    
     if not setting:
         # Show current settings
         channels = await ctx.bot.drop_system.get_channel_list(str(ctx.guild.id))
-        target_channel = next((ch for ch in channels if ch['id'] == str(channel.id)), None)
+        channel_config = next((ch for ch in channels if ch['id'] == str(target_channel.id)), None)
         
         embed = discord.Embed(
-            title=f"🔮 Drop Settings for #{channel.name}",
+            title=f"🔮 Drop Settings for #{target_channel.name}",
             color=int(config.colors['info'].replace('#', ''), 16)
         )
         
-        if target_channel:
-            settings = target_channel['settings']
+        if channel_config:
+            settings = channel_config['settings']
             embed.add_field(name="🎲 Rarity Multiplier", value=f"{settings.get('custom_rarity_multiplier', 1.0):.1f}x", inline=True)
             embed.add_field(name="💰 Amount Multiplier", value=f"{settings.get('custom_amount_multiplier', 1.0):.1f}x", inline=True)
             embed.add_field(name="⏰ Frequency Modifier", value=f"{settings.get('drop_frequency_modifier', 1.0):.1f}x", inline=True)
@@ -1306,7 +1747,7 @@ async def configure_drops(ctx: commands.Context, channel: discord.TextChannel, s
             raise ValueError("Invalid setting. Use: rarity_mult, amount_mult, frequency, rarities")
         
         result = await ctx.bot.drop_system.configure_channel_drops(
-            str(ctx.guild.id), str(channel.id), new_settings
+            str(ctx.guild.id), str(target_channel.id), new_settings
         )
         
         embed = discord.Embed(
@@ -1771,6 +2212,79 @@ def is_owner(user: discord.Member, bot: commands.Bot) -> bool:
     """Check if user is bot owner"""
     return user.id == bot.owner_id
 
+def parse_user_mention_or_id(user_input: str, guild: discord.Guild) -> discord.Member:
+    """Parse user from mention, ID, or username"""
+    if not user_input:
+        return None
+    
+    # Try mention format <@!123> or <@123>
+    if user_input.startswith('<@') and user_input.endswith('>'):
+        user_id = user_input.replace('<@!', '').replace('<@', '').replace('>', '')
+        try:
+            return guild.get_member(int(user_id))
+        except ValueError:
+            return None
+    
+    # Try direct ID
+    try:
+        user_id = int(user_input)
+        return guild.get_member(user_id)
+    except ValueError:
+        pass
+    
+    # Try username/display name
+    member = discord.utils.get(guild.members, name=user_input)
+    if not member:
+        member = discord.utils.get(guild.members, display_name=user_input)
+    
+    return member
+
+def parse_role_mention_or_id(role_input: str, guild: discord.Guild) -> discord.Role:
+    """Parse role from mention, ID, or name"""
+    if not role_input:
+        return None
+    
+    # Try mention format <@&123>
+    if role_input.startswith('<@&') and role_input.endswith('>'):
+        role_id = role_input.replace('<@&', '').replace('>', '')
+        try:
+            return guild.get_role(int(role_id))
+        except ValueError:
+            return None
+    
+    # Try direct ID
+    try:
+        role_id = int(role_input)
+        return guild.get_role(role_id)
+    except ValueError:
+        pass
+    
+    # Try role name
+    return discord.utils.get(guild.roles, name=role_input)
+
+def parse_channel_mention_or_id(channel_input: str, guild: discord.Guild) -> discord.TextChannel:
+    """Parse channel from mention, ID, or name"""
+    if not channel_input:
+        return None
+    
+    # Try mention format <#123>
+    if channel_input.startswith('<#') and channel_input.endswith('>'):
+        channel_id = channel_input.replace('<#', '').replace('>', '')
+        try:
+            return guild.get_channel(int(channel_id))
+        except ValueError:
+            return None
+    
+    # Try direct ID
+    try:
+        channel_id = int(channel_input)
+        return guild.get_channel(channel_id)
+    except ValueError:
+        pass
+    
+    # Try channel name
+    return discord.utils.get(guild.text_channels, name=channel_input)
+
 def get_command_help(command_name: str) -> str:
     """Get detailed help information for a specific command"""
     command_info = {
@@ -1873,6 +2387,36 @@ def get_command_help(command_name: str) -> str:
             'usage': '`w.prestige` or `/prestige`',
             'description': 'View prestige system information and requirements',
             'parameters': '• No parameters required'
+        },
+        'toggle-category': {
+            'usage': '`w.toggle-category <category> <enabled>` or `/toggle-category <category> <enabled>`',
+            'description': 'Enable or disable a leveling category (Admin only)',
+            'parameters': '• `category` (required): text, voice, role, or overall\n• `enabled` (required): true or false'
+        },
+        'set-user-xp': {
+            'usage': '`w.set-user-xp <user> <category> <amount>` or `/set-user-xp <user> <category> <amount>`',
+            'description': 'Set user\'s XP in a specific category (Admin only)',
+            'parameters': '• `user` (required): User mention, ID, or username\n• `category` (required): text, voice, role, or overall\n• `amount` (required): XP amount to set'
+        },
+        'add-user-xp': {
+            'usage': '`w.add-user-xp <user> <category> <amount>` or `/add-user-xp <user> <category> <amount>`',
+            'description': 'Add XP to user in a specific category (Admin only)',
+            'parameters': '• `user` (required): User mention, ID, or username\n• `category` (required): text, voice, role, or overall\n• `amount` (required): XP amount to add (can be negative)'
+        },
+        'reset-user-xp': {
+            'usage': '`w.reset-user-xp <user> [category]` or `/reset-user-xp <user> [category]`',
+            'description': 'Reset user\'s XP in specific category or all categories (Admin only)',
+            'parameters': '• `user` (required): User mention, ID, or username\n• `category` (optional): text, voice, role, overall, or all (default: all)'
+        },
+        'set-user-currency': {
+            'usage': '`w.set-user-currency <user> <amount>` or `/set-user-currency <user> <amount>`',
+            'description': 'Set user\'s currency balance (Admin only)',
+            'parameters': '• `user` (required): User mention, ID, or username\n• `amount` (required): Currency amount to set'
+        },
+        'add-user-currency': {
+            'usage': '`w.add-user-currency <user> <amount>` or `/add-user-currency <user> <amount>`',
+            'description': 'Add currency to user\'s balance (Admin only)',
+            'parameters': '• `user` (required): User mention, ID, or username\n• `amount` (required): Currency amount to add (can be negative)'
         },
         'help': {
             'usage': '`w.help` or `/help`',
@@ -2033,13 +2577,25 @@ async def get_help_embed_for_user(user: discord.Member, bot: commands.Bot) -> di
     # Add admin commands only for admins
     if is_user_admin:
         embed.add_field(
-            name="🛡️ Admin Commands",
-            value="**Server Management:**\n"
+            name="🛡️ Admin Drop Commands",
+            value="**Drop System Management:**\n"
                   "`/adddrops` `w.adddrops` - Add drop channel\n"
                   "`/removedrops` `w.removedrops` - Remove channel\n"
                   "`w.dropchannels` - List channels\n"
                   "`w.configdrops` - Configure settings\n"
                   "`/forcedrop` `w.forcedrop` - Force drop",
+            inline=True
+        )
+        
+        embed.add_field(
+            name="⚙️ Admin Leveling Commands",
+            value="**Leveling System Management:**\n"
+                  "`w.toggle-category` - Enable/disable categories\n"
+                  "`w.set-user-xp` - Set user XP\n"
+                  "`w.add-user-xp` - Add/remove user XP\n"
+                  "`w.reset-user-xp` - Reset user XP\n"
+                  "`w.set-user-currency` - Set user balance\n"
+                  "`w.add-user-currency` - Add/remove currency",
             inline=True
         )
     
@@ -2111,6 +2667,14 @@ async def main():
     bot.add_command(rank)
     bot.add_command(level_roles)
     bot.add_command(prestige_info)
+    
+    # Admin leveling management commands
+    bot.add_command(toggle_category)
+    bot.add_command(set_user_xp)
+    bot.add_command(add_user_xp)
+    bot.add_command(reset_user_xp)
+    bot.add_command(set_user_currency)
+    bot.add_command(add_user_currency)
     
     # Admin commands
     bot.add_command(giveaway_group)
