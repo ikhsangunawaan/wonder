@@ -126,6 +126,10 @@ class ShopSystem:
             }
         }
     
+    def get_all_items(self) -> Dict[str, Dict[str, Any]]:
+        """Get all shop items"""
+        return self.shop_items
+    
     async def get_shop_embed(self, category: str = 'all', page: int = 1) -> discord.Embed:
         """Create shop display embed"""
         items_per_page = 5

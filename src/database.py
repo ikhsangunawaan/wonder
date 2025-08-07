@@ -20,6 +20,8 @@ class Database:
         if self.use_mysql:
             # Use MySQL adapter
             self.mysql_db = MySQLDatabase()
+            # Set db_path for compatibility
+            self.db_path = None
         else:
             # SQLite configuration (fallback)
             self.db_path = Path(__file__).parent / db_path
@@ -31,6 +33,30 @@ class Database:
             return await self.mysql_db._get_connection()
         else:
             return aiosqlite.connect(self.db_path)
+    
+    def _get_sql_syntax(self, type_name: str) -> str:
+        """Get SQL syntax for different database types"""
+        if self.use_mysql:
+            # MySQL syntax
+            syntax_map = {
+                'text': 'TEXT',
+                'integer': 'INT',
+                'datetime': 'DATETIME',
+                'current_timestamp': 'NOW()',
+                'primary_key': 'PRIMARY KEY AUTO_INCREMENT',
+                'boolean': 'BOOLEAN'
+            }
+        else:
+            # SQLite syntax
+            syntax_map = {
+                'text': 'TEXT',
+                'integer': 'INTEGER',
+                'datetime': 'DATETIME',
+                'current_timestamp': 'CURRENT_TIMESTAMP',
+                'primary_key': 'PRIMARY KEY AUTOINCREMENT',
+                'boolean': 'BOOLEAN'
+            }
+        return syntax_map.get(type_name, type_name)
         
     async def init(self):
         """Initialize database and create all tables"""
