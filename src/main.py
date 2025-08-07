@@ -464,7 +464,7 @@ async def work(ctx: commands.Context):
     
     # Check for booster bonus
     if ctx.author.premium_since:  # Boost bonus
-        work_amount += config.booster['workBonus']
+        work_amount = int(work_amount * config.multipliers['booster']['work'])
     
     # Wonder work job options
     jobs = [

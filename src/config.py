@@ -91,5 +91,13 @@ class Config:
     def leveling(self) -> Dict[str, Any]:
         return self.get('leveling', {})
 
+    @property
+    def multipliers(self) -> Dict[str, Any]:
+        return self.get('multipliers', {})
+
+    @property
+    def drops(self) -> Dict[str, Any]:
+        return self.get('drops', {})
+
 # Global config instance
 config = Config()
