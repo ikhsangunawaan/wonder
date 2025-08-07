@@ -96,6 +96,28 @@ The Wonder Discord Bot embraces a **dreamy wonder** aesthetic combined with **ch
 - **Overall Progress Roles (5)**: Wonder Apprentice → Wonder Grandmaster
 - **Prestige System (5)**: Wonder Prestige I-V (35%-60% XP bonus)
 
+### 🚀 NEW: Progressive Leveling System
+
+**Enhanced Leveling Experience:**
+- **Level 1-100 Progression**: Balanced XP formula with intelligent scaling
+- **Role Rewards Every 5 Levels**: 20 configurable milestone roles
+- **Progressive XP Requirements**: Increases by level ranges (1-10, 11-30, 31-60, 61-100)
+- **Manual Role Configuration**: Admin commands for flexible role setup
+- **Automatic Role Assignment**: Seamless rewards upon reaching role levels
+- **Rich Progress Tracking**: Detailed embeds with progress bars and statistics
+
+**Admin Configuration Commands:**
+- `w.level-role-set <level> <@role> [description]` - Configure role rewards
+- `w.level-role-remove <level>` - Remove role configurations  
+- `w.level-roles-list` - View all configured roles
+- `w.xp-calculator <level>` - Calculate XP requirements
+
+**User Commands:**
+- `w.progressive-rank [@user]` - View progressive leveling stats
+- `w.xp-calc <level>` - Calculate XP needed for specific level
+
+*See `PROGRESSIVE_LEVELING_GUIDE.md` for complete setup instructions.*
+
 ### 🎨 Introduction Cards System
 **Card Creation:**
 - **Interactive Forms**: Modal-based form interface for easy creation
@@ -235,9 +257,18 @@ LOG_LEVEL=INFO
 ### 🎯 Leveling Commands
 | Command | Description | Usage Example | Access Level |
 |---------|-------------|---------------|--------------|
-| `w.rank` | Check levels and XP | `w.rank @user` | Everyone |
+| `w.rank` | Check levels and XP (original) | `w.rank @user` | Everyone |
 | `w.roles` | View level roles information | `w.roles text` | Everyone |
 | `w.prestige` | View prestige system info | `w.prestige` | Everyone |
+
+### 🚀 Progressive Leveling Commands
+| Command | Description | Usage Example | Access Level |
+|---------|-------------|---------------|--------------|
+| `w.progressive-rank` (aliases: `prank`, `plevel`) | View progressive leveling stats | `w.progressive-rank @user` | Everyone |
+| `w.xp-calculator` (alias: `xp-calc`) | Calculate XP for any level | `w.xp-calc 50` | Everyone |
+| `w.level-role-set` | Configure role reward | `w.level-role-set 25 @Veteran "Quarter-century!"` | Admin |
+| `w.level-role-remove` | Remove role reward | `w.level-role-remove 10` | Admin |
+| `w.level-roles-list` | List all configured roles | `w.level-roles-list` | Everyone |
 
 ### 🎉 Giveaway Commands
 | Command | Description | Usage Example | Access Level |

@@ -20,6 +20,7 @@ from role_manager import init_role_manager
 from games_system import games_system
 from wondercoins_drops import init_wondercoins_drops
 from leveling_system import init_leveling_system
+from progressive_leveling import init_progressive_leveling
 from cooldown_manager import cooldown_manager
 from intro_card_system import init_intro_card_system, IntroCardModal, IntroCardView
 from datetime import datetime
@@ -67,6 +68,7 @@ class WonderBot(commands.Bot):
         self.role_manager = None
         self.giveaway_system = None
         self.leveling_system = None
+        self.progressive_leveling = None
         self.drop_system = None
         self.intro_card_system = None
         
@@ -82,6 +84,7 @@ class WonderBot(commands.Bot):
         self.role_manager = init_role_manager(self)
         self.giveaway_system = init_giveaway_system(self)
         self.leveling_system = init_leveling_system(self)
+        self.progressive_leveling = init_progressive_leveling(self)
         self.drop_system = init_wondercoins_drops(self)
         self.intro_card_system = init_intro_card_system(self)
         
@@ -129,9 +132,57 @@ class WonderBot(commands.Bot):
         except Exception as e:
             logging.error(f"Error creating user: {e}")
         
-        # Handle leveling system
-        if hasattr(self, 'leveling_system') and self.leveling_system:
-            await self.leveling_system.handle_message(message)
+        # Handle leveling system (using progressive leveling)
+        if hasattr(self, 'progressive_leveling') and self.progressive_leveling:
+            xp_result = await self.progressive_leveling.handle_message_xp(message)
+            
+            if xp_result and xp_result.get('level_up'):
+                # Send level up notification
+                embed = discord.Embed(
+                    title="🎉 Level Up!",
+                    description=f"**{message.author.display_name}** reached **Level {xp_result['new_level']}**!",
+                    color=discord.Color.gold()
+                )
+                embed.add_field(
+                    name="✨ XP Gained",
+                    value=f"+{xp_result['xp_gained']} XP",
+                    inline=True
+                )
+                embed.add_field(
+                    name="📊 Total XP",
+                    value=f"{xp_result['total_xp']:,} XP",
+                    inline=True
+                )
+                
+                # Check for role reward
+                if xp_result.get('role_reward'):
+                    role_reward = xp_result['role_reward']
+                    role = message.guild.get_role(int(role_reward['role_id']))
+                    if role:
+                        try:
+                            await message.author.add_roles(role, reason=f"Level {role_reward['level']} reward")
+                            embed.add_field(
+                                name="🏷️ Role Reward",
+                                value=f"You earned the **{role_reward['role_name']}** role!",
+                                inline=False
+                            )
+                        except discord.Forbidden:
+                            embed.add_field(
+                                name="⚠️ Role Reward",
+                                value=f"You earned the **{role_reward['role_name']}** role, but I couldn't assign it due to permissions.",
+                                inline=False
+                            )
+                
+                # Show progress to next level
+                if xp_result['next_level_xp_needed'] > 0:
+                    embed.add_field(
+                        name="🎯 Next Level",
+                        value=f"{xp_result['next_level_xp_needed']:,} XP needed for Level {xp_result['new_level'] + 1}",
+                        inline=False
+                    )
+                
+                embed.set_thumbnail(url=message.author.display_avatar.url)
+                await message.channel.send(embed=embed)
         
         # Process commands
         await self.process_commands(message)
@@ -646,7 +697,404 @@ async def use_item(ctx: commands.Context, item_id: str):
     
     await ctx.send(embed=embed)
 
-# Leveling Commands
+# Progressive Leveling Commands
+
+@commands.hybrid_command(name='progressive-rank', aliases=['prank', 'plevel'])
+@app_commands.describe(user='User to check rank for (optional)')
+async def progressive_rank(ctx: commands.Context, user: discord.Member = None):
+    """Check your rank and level progress with the new progressive system"""
+    target_user = user or ctx.author
+    
+    # Get user progress from progressive leveling system
+    progress = await ctx.bot.progressive_leveling.get_user_progress(str(target_user.id))
+    
+    if not progress or progress.get('level', 1) == 1 and progress.get('total_xp', 0) == 0:
+        embed = discord.Embed(
+            title="📊 User Rank",
+            description=f"**{target_user.display_name}** hasn't started their leveling journey yet!\n\nSend some messages to gain XP and start leveling up! ✨",
+            color=discord.Color.blue()
+        )
+        embed.set_thumbnail(url=target_user.display_avatar.url)
+        embed.add_field(
+            name="🎯 Next Level",
+            value=f"Send messages to gain XP!\n**{ctx.bot.progressive_leveling.calculate_xp_needed(2)}** XP needed for Level 2",
+            inline=False
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    current_level = progress['level']
+    total_xp = progress['total_xp']
+    current_level_xp = progress['current_level_xp']
+    next_level_xp = progress['next_level_xp_needed']
+    progress_percentage = progress['progress_percentage']
+    
+    # Create main embed
+    embed = discord.Embed(
+        title="📊 Progressive Rank",
+        description=f"**{target_user.display_name}**'s progressive leveling stats",
+        color=discord.Color.gold() if current_level >= 50 else discord.Color.blue()
+    )
+    embed.set_thumbnail(url=target_user.display_avatar.url)
+    
+    # Current level info
+    embed.add_field(
+        name="🎯 Current Level",
+        value=f"**Level {current_level}**",
+        inline=True
+    )
+    embed.add_field(
+        name="📊 Total XP",
+        value=f"**{total_xp:,}** XP",
+        inline=True
+    )
+    embed.add_field(
+        name="📈 Progress",
+        value=f"**{progress_percentage:.1f}%**",
+        inline=True
+    )
+    
+    # Next level progress
+    if not progress.get('max_level_reached', False):
+        embed.add_field(
+            name="⬆️ Current Level Progress",
+            value=f"**{current_level_xp:,}** / **{current_level_xp + next_level_xp:,}** XP",
+            inline=True
+        )
+        embed.add_field(
+            name="🎯 XP to Next Level",
+            value=f"**{next_level_xp:,}** XP needed",
+            inline=True
+        )
+        
+        # Progress bar
+        bar_length = 20
+        filled_length = int(bar_length * progress_percentage / 100)
+        bar = "█" * filled_length + "░" * (bar_length - filled_length)
+        embed.add_field(
+            name="📊 Progress Bar",
+            value=f"`{bar}` {progress_percentage:.1f}%",
+            inline=False
+        )
+    else:
+        embed.add_field(
+            name="🏆 Maximum Level",
+            value="**Congratulations!** You've reached the maximum level!",
+            inline=False
+        )
+    
+    # Role information
+    next_role_level = progress.get('next_role_level')
+    if next_role_level:
+        levels_to_role = progress.get('levels_to_next_role', 0)
+        embed.add_field(
+            name="🏷️ Next Role",
+            value=f"Level **{next_role_level}** ({levels_to_role} levels away)",
+            inline=True
+        )
+        
+        # Check if there's a configured role for the next role level
+        role_config = await ctx.bot.progressive_leveling.get_level_role_config(str(ctx.guild.id), next_role_level)
+        if role_config:
+            role = ctx.guild.get_role(int(role_config['role_id']))
+            if role:
+                embed.add_field(
+                    name="🎁 Role Reward",
+                    value=f"{role.mention}",
+                    inline=True
+                )
+    
+    # Check current role level rewards
+    if ctx.bot.progressive_leveling.is_role_level(current_level):
+        role_config = await ctx.bot.progressive_leveling.get_level_role_config(str(ctx.guild.id), current_level)
+        if role_config:
+            role = ctx.guild.get_role(int(role_config['role_id']))
+            if role and role in target_user.roles:
+                embed.add_field(
+                    name="🏆 Current Role",
+                    value=f"{role.mention}",
+                    inline=True
+                )
+    
+    embed.set_footer(text=f"Use {config.prefix}level-roles-list to see all available level roles • Max level: {ctx.bot.progressive_leveling.max_level}")
+    await ctx.send(embed=embed)
+
+# Level Role Configuration Commands
+
+@commands.hybrid_command(name='level-role-set', aliases=['set-level-role'])
+@app_commands.describe(
+    level="Level number (must be multiple of 5, from 5 to 100)",
+    role="The role to assign at this level",
+    description="Optional description for this level role"
+)
+@commands.has_permissions(administrator=True)
+async def set_level_role(ctx: commands.Context, level: int, role: discord.Role, *, description: str = None):
+    """Set a role reward for a specific level (Admin only)"""
+    
+    # Validate level
+    if not ctx.bot.progressive_leveling.is_role_level(level):
+        embed = discord.Embed(
+            title="❌ Invalid Level",
+            description=f"Level must be a multiple of 5 between 5 and 100.\n\n"
+                       f"**Valid levels:** 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100",
+            color=discord.Color.red()
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    # Check if role is manageable by bot
+    if role.position >= ctx.guild.me.top_role.position:
+        embed = discord.Embed(
+            title="❌ Role Position Error",
+            description=f"I cannot manage the role **{role.name}** because it's higher than or equal to my highest role.\n\n"
+                       f"Please move my role above **{role.name}** in the server settings.",
+            color=discord.Color.red()
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    # Set the role configuration
+    success = await ctx.bot.progressive_leveling.set_level_role_config(
+        str(ctx.guild.id), 
+        level, 
+        str(role.id), 
+        role.name,
+        description
+    )
+    
+    if success:
+        embed = discord.Embed(
+            title="✅ Level Role Configured",
+            description=f"Successfully configured role reward for **Level {level}**",
+            color=discord.Color.green()
+        )
+        embed.add_field(
+            name="🎯 Level", 
+            value=f"**{level}**", 
+            inline=True
+        )
+        embed.add_field(
+            name="🏷️ Role", 
+            value=f"{role.mention}\n`{role.name}`", 
+            inline=True
+        )
+        embed.add_field(
+            name="📝 Description", 
+            value=description or f"Level {level} Role", 
+            inline=False
+        )
+        embed.add_field(
+            name="📊 XP Required",
+            value=f"**{ctx.bot.progressive_leveling.calculate_total_xp_for_level(level):,}** total XP",
+            inline=True
+        )
+        embed.set_footer(text=f"Configured by {ctx.author.display_name}")
+        
+    else:
+        embed = discord.Embed(
+            title="❌ Configuration Failed",
+            description="Failed to configure the level role. Please try again.",
+            color=discord.Color.red()
+        )
+    
+    await ctx.send(embed=embed)
+
+@commands.hybrid_command(name='level-role-remove', aliases=['remove-level-role'])
+@app_commands.describe(level="Level number to remove role from")
+@commands.has_permissions(administrator=True)
+async def remove_level_role(ctx: commands.Context, level: int):
+    """Remove a role reward from a specific level (Admin only)"""
+    
+    # Check if role exists for this level
+    role_config = await ctx.bot.progressive_leveling.get_level_role_config(str(ctx.guild.id), level)
+    if not role_config:
+        embed = discord.Embed(
+            title="❌ No Role Configured",
+            description=f"No role is configured for Level {level}.",
+            color=discord.Color.red()
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    # Remove the role configuration
+    success = await ctx.bot.progressive_leveling.remove_level_role_config(str(ctx.guild.id), level)
+    
+    if success:
+        embed = discord.Embed(
+            title="✅ Level Role Removed",
+            description=f"Successfully removed role configuration for **Level {level}**",
+            color=discord.Color.green()
+        )
+        embed.add_field(
+            name="🏷️ Removed Role", 
+            value=f"`{role_config['role_name']}`", 
+            inline=True
+        )
+        embed.add_field(
+            name="🎯 Level", 
+            value=f"**{level}**", 
+            inline=True
+        )
+    else:
+        embed = discord.Embed(
+            title="❌ Removal Failed",
+            description="Failed to remove the level role configuration.",
+            color=discord.Color.red()
+        )
+    
+    await ctx.send(embed=embed)
+
+@commands.hybrid_command(name='level-roles-list', aliases=['list-level-roles', 'level-roles'])
+@app_commands.describe()
+async def list_level_roles(ctx: commands.Context):
+    """List all configured level roles for this server"""
+    
+    configured_roles = await ctx.bot.progressive_leveling.get_all_configured_roles(str(ctx.guild.id))
+    
+    if not configured_roles:
+        embed = discord.Embed(
+            title="📋 Level Roles",
+            description="No level roles have been configured yet.\n\n"
+                       "Use `/level-role-set` to configure roles for specific levels.",
+            color=discord.Color.blue()
+        )
+        embed.add_field(
+            name="💡 Available Levels",
+            value="5, 10, 15, 20, 25, 30, 35, 40, 45, 50\n55, 60, 65, 70, 75, 80, 85, 90, 95, 100",
+            inline=False
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    # Sort by level
+    sorted_roles = sorted(configured_roles.items())
+    
+    embed = discord.Embed(
+        title="📋 Configured Level Roles",
+        description=f"**{len(configured_roles)}** level roles configured",
+        color=discord.Color.blue()
+    )
+    
+    # Add fields for each configured role
+    for level, role_data in sorted_roles:
+        role = ctx.guild.get_role(int(role_data['role_id']))
+        role_display = role.mention if role else f"`{role_data['role_name']}` (Deleted)"
+        
+        xp_needed = ctx.bot.progressive_leveling.calculate_total_xp_for_level(level)
+        
+        embed.add_field(
+            name=f"🎯 Level {level}",
+            value=f"{role_display}\n"
+                  f"📊 **{xp_needed:,}** XP\n"
+                  f"📝 {role_data.get('description', 'No description')}",
+            inline=True
+        )
+    
+    # Add pagination if too many roles
+    if len(configured_roles) > 25:  # Discord embed field limit
+        embed.set_footer(text="Some roles may not be displayed due to Discord limits")
+    
+    await ctx.send(embed=embed)
+
+@commands.hybrid_command(name='xp-calculator', aliases=['xp-calc'])
+@app_commands.describe(level="Target level to calculate XP for (1-100)")
+async def xp_calculator(ctx: commands.Context, level: int):
+    """Calculate XP requirements for any level (1-100)"""
+    
+    if level < 1 or level > ctx.bot.progressive_leveling.max_level:
+        embed = discord.Embed(
+            title="❌ Invalid Level",
+            description=f"Level must be between 1 and {ctx.bot.progressive_leveling.max_level}",
+            color=discord.Color.red()
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    if level == 1:
+        embed = discord.Embed(
+            title="🎯 Level 1 XP Information",
+            description="Level 1 is the starting level and requires no XP.",
+            color=discord.Color.blue()
+        )
+        embed.add_field(
+            name="📊 Total XP",
+            value="**0** XP",
+            inline=True
+        )
+        embed.add_field(
+            name="⬆️ Next Level",
+            value=f"**{ctx.bot.progressive_leveling.calculate_xp_needed(2)}** XP needed for Level 2",
+            inline=True
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    total_xp = ctx.bot.progressive_leveling.calculate_total_xp_for_level(level)
+    xp_for_this_level = ctx.bot.progressive_leveling.calculate_xp_needed(level)
+    
+    embed = discord.Embed(
+        title=f"🎯 Level {level} XP Calculator",
+        description=f"XP requirements for reaching Level {level}",
+        color=discord.Color.blue()
+    )
+    
+    embed.add_field(
+        name="📊 Total XP Required",
+        value=f"**{total_xp:,}** XP",
+        inline=True
+    )
+    embed.add_field(
+        name="⬆️ XP for This Level",
+        value=f"**{xp_for_this_level:,}** XP",
+        inline=True
+    )
+    
+    # Show next level info if not at max
+    if level < ctx.bot.progressive_leveling.max_level:
+        next_level_xp = ctx.bot.progressive_leveling.calculate_xp_needed(level + 1)
+        embed.add_field(
+            name="➡️ XP for Next Level",
+            value=f"**{next_level_xp:,}** XP needed for Level {level + 1}",
+            inline=False
+        )
+    
+    # Show if this level has a role
+    if ctx.bot.progressive_leveling.is_role_level(level):
+        role_config = await ctx.bot.progressive_leveling.get_level_role_config(str(ctx.guild.id), level)
+        if role_config:
+            role = ctx.guild.get_role(int(role_config['role_id']))
+            role_display = role.mention if role else f"`{role_config['role_name']}`"
+            embed.add_field(
+                name="🏷️ Role Reward",
+                value=role_display,
+                inline=True
+            )
+        else:
+            embed.add_field(
+                name="🏷️ Role Reward",
+                value="Not configured",
+                inline=True
+            )
+    
+    # Add some milestone information
+    milestones = []
+    for milestone in [10, 25, 50, 75, 100]:
+        if level <= milestone:
+            milestone_xp = ctx.bot.progressive_leveling.calculate_total_xp_for_level(milestone)
+            milestones.append(f"Level {milestone}: **{milestone_xp:,}** XP")
+            if len(milestones) >= 3:
+                break
+    
+    if milestones:
+        embed.add_field(
+            name="🎯 Upcoming Milestones",
+            value="\n".join(milestones),
+            inline=False
+        )
+    
+    await ctx.send(embed=embed)
+
+# Original Leveling Commands
 @commands.hybrid_command(name='rank')
 @app_commands.describe(user='User to check rank for (mention or ID - optional)')
 async def rank(ctx: commands.Context, user: str = None):
@@ -2711,6 +3159,13 @@ async def main():
     bot.add_command(rank)
     bot.add_command(level_roles)
     bot.add_command(prestige_info)
+    
+    # Progressive leveling commands
+    bot.add_command(progressive_rank)
+    bot.add_command(set_level_role)
+    bot.add_command(remove_level_role)
+    bot.add_command(list_level_roles)
+    bot.add_command(xp_calculator)
     
     # Admin leveling management commands
     bot.add_command(toggle_category)
