@@ -8,9 +8,10 @@
 - [📦 Installation & Setup](#-installation--setup)
 - [📚 Commands Reference](#-commands-reference)
 - [⚙️ Configuration](#-configuration)
-- [🗄️ Database Schema](#-database-schema)
-- [🛠️ Development Guide](#-development-guide)
+- [🗄️ Database Support](#-database-support)
 - [🚀 Deployment](#-deployment)
+- [🔧 Admin Features](#-admin-features)
+- [🛠️ Development Guide](#-development-guide)
 - [🔧 Troubleshooting](#-troubleshooting)
 - [🤝 Contributing](#-contributing)
 
@@ -73,9 +74,9 @@ The Wonder Discord Bot embraces a **dreamy wonder** aesthetic combined with **ch
 - **Fair RNG**: Cryptographically secure random number generation
 - **Statistics Tracking**: Comprehensive gambling statistics and history
 
-### 🎯 Advanced Leveling System
-**4-Category Progression System:**
+### 🎯 Comprehensive Leveling System
 
+**4-Category Progression System:**
 | Category | Max Level | XP Source | Cooldown |
 |----------|-----------|-----------|----------|
 | **Text** | 50 | Chat messages (15-25 XP) | 60 seconds |
@@ -88,11 +89,12 @@ The Wonder Discord Bot embraces a **dreamy wonder** aesthetic combined with **ch
 - **Server Boosters**: 1.5x multiplier
 - **Premium Members**: 1.75x multiplier
 
-**Progression Rewards:**
-- **Currency Rewards**: WonderCoins bonuses at level milestones
-- **Role Rewards**: Automatic role assignment (configurable)
-- **Title System**: Custom titles for achievements
-- **Level Announcements**: Beautiful embeds for level-up celebrations
+**24 Level Roles + 5 Prestige Levels:**
+- **Text Chat Roles (6)**: Text Chatter → Supreme Wordsmith
+- **Voice Activity Roles (6)**: Voice Newcomer → Voice Legend
+- **Community Role Roles (6)**: Helper → Community Legend
+- **Overall Progress Roles (5)**: Wonder Apprentice → Wonder Grandmaster
+- **Prestige System (5)**: Wonder Prestige I-V (35%-60% XP bonus)
 
 ### 🎨 Introduction Cards System
 **Card Creation:**
@@ -134,13 +136,6 @@ The Wonder Discord Bot embraces a **dreamy wonder** aesthetic combined with **ch
 - **Purchase Confirmation**: Clear transaction details and confirmations
 - **Inventory Management**: Comprehensive item tracking and usage
 
-### 🔧 Welcome & Setup System
-**Welcome Features:**
-- **Custom Messages**: Personalized welcome text with templates
-- **Introduction Integration**: Direct links to introduction card creation
-- **Channel Configuration**: Automatic posting to designated channels
-- **Member Onboarding**: Streamlined new user experience
-
 ## 📦 Installation & Setup
 
 ### Prerequisites
@@ -157,6 +152,13 @@ Recommended: 2GB+ RAM, 2GB+ storage
 
 ### Quick Setup
 
+**Option 1: Universal Deployment Script (Recommended)**
+```bash
+# Download and run the deployment script
+python3 deploy.py
+```
+
+**Option 2: Manual Setup**
 1. **Clone the repository**
    ```bash
    git clone <repository-url>
@@ -191,7 +193,7 @@ DISCORD_TOKEN=your_discord_bot_token_here
 PREMIUM_ROLE_ID=your_premium_role_id
 BOOSTER_ROLE_ID=your_booster_role_id
 
-# OPTIONAL: Database and logging
+# OPTIONAL: Database configuration
 DATABASE_PATH=wonder.db
 LOG_LEVEL=INFO
 ```
@@ -234,15 +236,17 @@ LOG_LEVEL=INFO
 | Command | Description | Usage Example | Access Level |
 |---------|-------------|---------------|--------------|
 | `w.rank` | Check levels and XP | `w.rank @user` | Everyone |
+| `w.roles` | View level roles information | `w.roles text` | Everyone |
+| `w.prestige` | View prestige system info | `w.prestige` | Everyone |
 
 ### 🎉 Giveaway Commands
 | Command | Description | Usage Example | Access Level |
 |---------|-------------|---------------|--------------|
-| `w.giveaway create` | Create advanced giveaway | `w.giveaway create "Prize" 1h --winners 3` | Admin |
+| `w.giveaway-create` | Create advanced giveaway | `w.giveaway-create "Prize" 1h --winners 3` | Admin |
 | `w.quickgiveaway` | Quick giveaway creation | `w.quickgiveaway 60 1 "100 WonderCoins"` | Admin |
-| `w.giveaway end` | End giveaway manually | `w.giveaway end 123` | Admin/Host |
-| `w.giveaway reroll` | Reroll giveaway winners | `w.giveaway reroll 123 2` | Admin/Host |
-| `w.giveaway list` | List active giveaways | `w.giveaway list` | Everyone |
+| `w.giveaway-end` | End giveaway manually | `w.giveaway-end 123` | Admin/Host |
+| `w.giveaway-reroll` | Reroll giveaway winners | `w.giveaway-reroll 123 2` | Admin/Host |
+| `w.giveaway-list` | List active giveaways | `w.giveaway-list` | Everyone |
 
 ### 🪙 WonderCoins Drop Commands
 | Command | Description | Usage Example | Access Level |
@@ -318,136 +322,130 @@ LOG_LEVEL=INFO
 }
 ```
 
-### WonderCoins Drop System Configuration
-```python
-# Configuration in wondercoins_drops.py
-drop_config = {
-    "minAmount": 50,
-    "maxAmount": 500,
-    "minInterval": 1800000,    # 30 minutes
-    "maxInterval": 10800000,   # 3 hours
-    "collectTime": 60000,      # 60 seconds
-    
-    # Rarity system
-    "rarities": {
-        "common": {"chance": 0.84, "multiplier": 1},
-        "rare": {"chance": 0.10, "multiplier": 3},
-        "epic": {"chance": 0.05, "multiplier": 5},
-        "legendary": {"chance": 0.01, "multiplier": 10}
-    }
+## 🗄️ Database Support
+
+The bot supports both **SQLite** (default) and **MySQL** databases:
+
+### SQLite Configuration (Default)
+```json
+{
+  "database": {
+    "type": "sqlite",
+    "path": "wonder.db"
+  }
 }
 ```
 
-## 🗄️ Database Schema
-
-The bot uses SQLite with comprehensive table structure:
-
-### Core Tables
-```sql
--- User economy and profile data
-CREATE TABLE users (
-    user_id TEXT PRIMARY KEY,
-    username TEXT,
-    balance INTEGER DEFAULT 0,
-    daily_last_claimed TEXT,
-    work_last_used TEXT,
-    total_earned INTEGER DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
--- Comprehensive transaction history
-CREATE TABLE transactions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id TEXT,
-    type TEXT,
-    amount INTEGER,
-    description TEXT,
-    metadata TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
--- User leveling data (4-category system)
-CREATE TABLE user_levels (
-    user_id TEXT PRIMARY KEY,
-    text_level INTEGER DEFAULT 1,
-    text_xp INTEGER DEFAULT 0,
-    voice_level INTEGER DEFAULT 1,
-    voice_xp INTEGER DEFAULT 0,
-    role_level INTEGER DEFAULT 1,
-    role_xp INTEGER DEFAULT 0,
-    overall_level INTEGER DEFAULT 1,
-    total_xp INTEGER DEFAULT 0,
-    last_text_xp DATETIME,
-    voice_session_start DATETIME
-);
-
--- Introduction cards system
-CREATE TABLE introduction_cards (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id TEXT UNIQUE,
-    name TEXT,
-    age INTEGER,
-    location TEXT,
-    hobbies TEXT,
-    favorite_color TEXT,
-    bio TEXT,
-    image_url TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
+### MySQL Configuration
+```json
+{
+  "database": {
+    "type": "mysql",
+    "host": "your-mysql-host",
+    "port": 3306,
+    "database": "your_database_name",
+    "username": "your_username",
+    "password": "your_password",
+    "charset": "utf8mb4",
+    "autocommit": true,
+    "pool_settings": {
+      "minsize": 1,
+      "maxsize": 10
+    }
+  }
+}
 ```
 
-### Advanced Tables
-```sql
--- WonderCoins drop statistics
-CREATE TABLE drop_stats (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    guild_id TEXT,
-    user_id TEXT,
-    amount INTEGER,
-    rarity TEXT,
-    collection_type TEXT,
-    multiplier REAL,
-    drop_timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
--- Comprehensive giveaway system
-CREATE TABLE giveaways (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    guild_id TEXT,
-    channel_id TEXT,
-    message_id TEXT,
-    host_id TEXT,
-    prize TEXT,
-    description TEXT,
-    winner_count INTEGER,
-    end_time DATETIME,
-    ended BOOLEAN DEFAULT FALSE,
-    required_roles TEXT,
-    forbidden_roles TEXT,
-    bypass_roles TEXT,
-    winner_role_id TEXT,
-    min_account_age INTEGER,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
--- User inventory system
-CREATE TABLE user_inventory (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id TEXT,
-    item_id TEXT,
-    quantity INTEGER DEFAULT 1,
-    acquired_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
--- Drop channel configuration
-CREATE TABLE drop_channels (
-    guild_id TEXT,
-    channel_id TEXT,
-    added_by TEXT,
-    added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (guild_id, channel_id)
-);
+### Database Migration
+To migrate from SQLite to MySQL:
+```bash
+python migrate_to_mysql.py
 ```
+
+## 🚀 Deployment
+
+### Supported Platforms
+
+The bot can be deployed on any platform with Python 3.8+:
+
+#### ☁️ Cloud Platforms
+- **Heroku**: Use `Procfile` - `worker: python run.py`
+- **Railway**: Use `railway.json` configuration
+- **Render**: Deploy as Background Worker with `render.yaml`
+
+#### 🐳 Docker
+```bash
+# Build and run with Docker
+docker build -t wonder-bot .
+docker run -d --env-file .env wonder-bot
+
+# Or use Docker Compose
+docker-compose up -d
+```
+
+#### 🖥️ VPS/Dedicated Servers
+```bash
+# Automated installation
+sudo bash install.sh
+
+# Manual installation
+python3 deploy.py
+systemctl start wonder-bot
+```
+
+#### 🏠 Pterodactyl Panel
+1. Create new Python server
+2. Upload bot files
+3. Set startup command: `python3 run.py`
+4. Configure environment variables
+
+### Universal Deployment Script
+The bot includes a universal deployment script that works on any platform:
+
+```bash
+python3 deploy.py
+```
+
+This script automatically:
+- Detects your system configuration
+- Installs dependencies
+- Creates configuration files
+- Sets up startup scripts
+- Validates the installation
+
+## 🔧 Admin Features
+
+### Category Management
+Admins can control leveling categories per server:
+```
+w.toggle-category text false    # Disable text leveling
+w.toggle-category voice true    # Enable voice leveling
+```
+
+### User Management
+Comprehensive user data management:
+```
+w.set-user-xp @user text 1000      # Set user XP
+w.add-user-xp @user voice 500      # Add XP
+w.reset-user-xp @user all          # Reset all XP
+w.set-user-currency @user 5000     # Set currency
+w.add-user-currency @user -1000    # Remove currency
+```
+
+### Enhanced Input Parsing
+All admin commands accept:
+- **User mentions**: `@username`
+- **User IDs**: `123456789`
+- **Role mentions**: `@role`
+- **Role IDs**: `987654321`
+- **Channel mentions**: `#channel`
+- **Channel IDs**: `111222333`
+
+### Permission-Based Help
+The help system automatically shows different commands based on user permissions:
+- **Regular users**: Basic commands only
+- **Administrators**: Admin commands included
+- **Bot owners**: All commands visible
 
 ## 🛠️ Development Guide
 
@@ -455,106 +453,56 @@ CREATE TABLE drop_channels (
 ```
 wonder-discord-bot/
 ├── src/
-│   ├── main.py                 # Main bot implementation with all commands
+│   ├── main.py                 # Main bot implementation
 │   ├── config.py               # Configuration management
-│   ├── database.py             # Database operations and schema
-│   ├── shop_system.py          # Shop and inventory management
-│   ├── giveaway_system.py      # Advanced giveaway system
-│   ├── role_manager.py         # Role assignment and management
-│   ├── games_system.py         # Gambling games with animations
-│   ├── wondercoins_drops.py    # Automatic drop system
-│   ├── leveling_system.py      # 4-category leveling system
-│   ├── intro_card_system.py    # Introduction card generation
-│   ├── cooldown_manager.py     # Cooldown and rate limiting
+│   ├── database.py             # Database operations
+│   ├── mysql_database.py       # MySQL adapter
+│   ├── shop_system.py          # Shop and inventory
+│   ├── giveaway_system.py      # Giveaway system
+│   ├── role_manager.py         # Role management
+│   ├── games_system.py         # Gambling games
+│   ├── wondercoins_drops.py    # Drop system
+│   ├── leveling_system.py      # Leveling system
+│   ├── intro_card_system.py    # Introduction cards
+│   ├── cooldown_manager.py     # Cooldown management
 │   └── utils/
-│       └── canvas_utils.py     # Image generation utilities
+├── deploy.py                   # Universal deployment
+├── validate_deployment.py      # Deployment validation
+├── migrate_to_mysql.py         # Database migration
 ├── config.json                 # Bot configuration
-├── requirements.txt            # Python dependencies
-├── run.py                      # Bot runner script
-├── start.sh                    # Shell startup script
-├── .env.example                # Environment template
+├── requirements.txt            # Dependencies
+├── run.py                      # Entry point
+├── Dockerfile                  # Docker deployment
+├── docker-compose.yml          # Docker Compose
 └── README.md                   # This documentation
 ```
 
 ### Technology Stack
 - **discord.py**: Modern Discord API wrapper with hybrid commands
-- **aiosqlite**: Async SQLite operations for performance
-- **Pillow (PIL)**: Advanced image generation and manipulation
+- **aiosqlite/aiomysql**: Async database operations
+- **Pillow (PIL)**: Image generation and manipulation
 - **aiohttp**: HTTP requests for avatar fetching
 - **python-dotenv**: Environment variable management
 
-### Adding New Features
+### Error Handling System
+The bot includes comprehensive error handling:
+- **Detailed Error Messages**: Clear explanations of what went wrong
+- **Usage Guidance**: Shows correct command usage
+- **Parameter Validation**: Validates input before execution
+- **Graceful Fallbacks**: Automatic recovery from non-critical errors
 
-1. **New Commands**: Add hybrid commands in `main.py` or create new cog files
-2. **Database Changes**: Update `database.py` with new schema and methods
-3. **Configuration**: Modify `config.json` for new settings
-4. **Images**: Extend `canvas_utils.py` for new image generation features
-
-## 🚀 Deployment
-
-### Production Environment Setup
-
-1. **Prepare Environment**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # Linux/Mac
-   # or venv\Scripts\activate  # Windows
-   pip install -r requirements.txt
-   ```
-
-2. **Production Configuration**
-   ```env
-   NODE_ENV=production
-   DEBUG=false
-   DATABASE_PATH=/opt/wonderbot/data/wonder.db
-   LOG_LEVEL=INFO
-   ```
-
-3. **Service Setup (systemd)**
-   ```ini
-   [Unit]
-   Description=Wonder Discord Bot
-   After=network.target
-
-   [Service]
-   Type=simple
-   User=wonderbot
-   WorkingDirectory=/opt/wonder-discord-bot
-   Environment=PATH=/opt/wonder-discord-bot/venv/bin
-   ExecStart=/opt/wonder-discord-bot/venv/bin/python run.py
-   Restart=always
-
-   [Install]
-   WantedBy=multi-user.target
-   ```
-
-### Docker Deployment
-```dockerfile
-FROM python:3.10-slim
-
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-
-COPY . .
-CMD ["python", "run.py"]
+Example error message:
 ```
+❌ Command Error
+**Invalid argument provided for `coinflip` command**
+Bet amount must be between 10 and 1000 WonderCoins.
 
-### Cloud Platform Deployment
-
-**Heroku:**
-```bash
-# Use provided Procfile
-worker: python run.py
-
-# Set environment variables in dashboard
-# Deploy with git push heroku main
+📝 Usage: `w.coinflip <amount> <choice>` or `/coinflip <amount> <choice>`
+📋 Description: Flip a coin and bet WonderCoins
+⚙️ Parameters:
+• amount (required): Amount to bet (10-1000 coins)
+• choice (required): h/heads or t/tails
 ```
-
-**Railway/Render:**
-- Upload project to platform
-- Set environment variables
-- Use start command: `python run.py`
 
 ## 🔧 Troubleshooting
 
@@ -576,6 +524,9 @@ worker: python run.py
 ls -la wonder.db
 chmod 664 wonder.db
 
+# Test database connection
+python test_mysql_connection.py  # For MySQL
+
 # Recreate database if corrupted
 rm wonder.db
 python run.py  # Will recreate database
@@ -587,6 +538,9 @@ python run.py  # Will recreate database
 ```bash
 # Reinstall dependencies
 pip install -r requirements.txt --force-reinstall
+
+# Use deployment script
+python3 deploy.py
 
 # Check virtual environment
 which python
@@ -604,11 +558,21 @@ sudo apt-get install fonts-dejavu fonts-liberation
 pip install Pillow --upgrade
 ```
 
-### Debug Mode
-Enable detailed logging by adding to `.env`:
-```env
-DEBUG=true
-LOG_LEVEL=DEBUG
+### Debug Tools
+The bot includes several debug and validation tools:
+
+```bash
+# Validate deployment
+python3 validate_deployment.py
+
+# Test bot functionality
+python3 debug_bot.py
+
+# Test MySQL connection
+python3 test_mysql_connection.py
+
+# Advanced debugging
+python3 debug_advanced.py
 ```
 
 ### Performance Monitoring
