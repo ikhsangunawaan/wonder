@@ -645,7 +645,7 @@ async def use_item(ctx: commands.Context, item_id: str):
 @commands.hybrid_command(name='rank')
 @app_commands.describe(user='User to check rank for (optional)')
 async def rank(ctx: commands.Context, user: discord.Member = None):
-    """View your or someone's rank"""
+    """View comprehensive rank information across all categories"""
     target_user = user or ctx.author
     rank_info = await ctx.bot.leveling_system.get_user_rank(str(target_user.id))
     
@@ -654,42 +654,222 @@ async def rank(ctx: commands.Context, user: discord.Member = None):
         return
     
     embed = discord.Embed(
-        title=f"📊 Rank - {target_user.display_name}",
+        title=f"🌟 Comprehensive Rank - {target_user.display_name}",
+        description="*Multi-Category Leveling System*",
         color=int(config.colors['primary'].replace('#', ''), 16)
     )
     
-    embed.add_field(
-        name="📈 Level",
-        value=f"**{rank_info['level']}**",
-        inline=True
-    )
+    # Add category information
+    categories = {
+        'text': {'emoji': '💬', 'name': 'Text Chat'},
+        'voice': {'emoji': '🎤', 'name': 'Voice Activity'},
+        'role': {'emoji': '🎭', 'name': 'Community Role'},
+        'overall': {'emoji': '⭐', 'name': 'Overall Progress'}
+    }
     
-    embed.add_field(
-        name="✨ XP",
-        value=f"{rank_info['xp']:,}",
-        inline=True
-    )
-    
-    if rank_info['xp_needed'] > 0:
+    for category, info in categories.items():
+        level_data = rank_info['levels'].get(category, {})
+        current_role = rank_info['roles_earned'].get(category)
+        next_role = rank_info['next_roles'].get(category)
+        
+        level = level_data.get('level', 0)
+        xp = level_data.get('xp', 0)
+        xp_needed = level_data.get('xp_needed', 0)
+        
+        # Build field value
+        field_value = f"**Level {level}** • {xp:,} XP"
+        
+        if current_role:
+            field_value += f"\n🏆 **{current_role['name']}**"
+            if current_role['perks']:
+                field_value += f"\n🎁 {', '.join(current_role['perks'][:2])}"
+        
+        if next_role and xp_needed > 0:
+            field_value += f"\n\n🎯 Next: **{next_role['name']}** ({next_role['levels_needed']} levels)"
+        elif level >= 50:
+            field_value += f"\n\n🏆 **MAX LEVEL REACHED!**"
+        
         embed.add_field(
-            name="🎯 Next Level",
-            value=f"{rank_info['xp_needed']:,} XP needed",
+            name=f"{info['emoji']} {info['name']}",
+            value=field_value,
             inline=True
         )
-    else:
+    
+    # Add prestige information if eligible
+    prestige_info = rank_info.get('prestige_info', {})
+    if prestige_info.get('eligible'):
         embed.add_field(
-            name="🏆 Max Level",
-            value="Level cap reached!",
-            inline=True
+            name="⭐ Prestige Eligible",
+            value="🌟 **You can prestige!**\nAll categories at level 50\nUnlock exclusive benefits",
+            inline=False
         )
     
+    # Add statistics
+    stats_value = f"💬 **Messages:** {rank_info['total_messages']:,}\n"
+    if rank_info.get('total_voice_time'):
+        hours = rank_info['total_voice_time'] // 3600
+        stats_value += f"🎤 **Voice Time:** {hours:,} hours\n"
+    
+    prestige_level = rank_info.get('prestige_level', 0)
+    if prestige_level > 0:
+        stats_value += f"⭐ **Prestige Level:** {prestige_level}"
+    
     embed.add_field(
-        name="💬 Messages",
-        value=f"{rank_info['total_messages']:,}",
-        inline=True
+        name="📊 Statistics",
+        value=stats_value,
+        inline=False
     )
     
     embed.set_thumbnail(url=target_user.display_avatar.url)
+    embed.set_footer(text="Wonder Leveling System • Progress across all activities")
+    
+    await ctx.send(embed=embed)
+
+@commands.hybrid_command(name='roles')
+@app_commands.describe(category='Category to view roles for (text/voice/role/overall)')
+async def level_roles(ctx: commands.Context, category: str = None):
+    """View all available level roles and their requirements"""
+    level_roles_config = config.get('leveling.levelRoles', {})
+    
+    if not level_roles_config:
+        await ctx.send("❌ Level roles system is not configured.")
+        return
+    
+    embed = discord.Embed(
+        title="🏆 Wonder Level Roles System",
+        description="*Earn roles and perks as you level up in different categories*",
+        color=int(config.colors['primary'].replace('#', ''), 16)
+    )
+    
+    # If specific category requested
+    if category and category.lower() in level_roles_config:
+        cat_name = category.lower()
+        category_roles = level_roles_config[cat_name]
+        
+        category_names = {
+            'text': '💬 Text Chat Roles',
+            'voice': '🎤 Voice Activity Roles', 
+            'role': '🎭 Community Role Roles',
+            'overall': '⭐ Overall Progress Roles'
+        }
+        
+        embed.title = f"🏆 {category_names.get(cat_name, f'{cat_name.title()} Roles')}"
+        
+        for level in sorted([int(x) for x in category_roles.keys()]):
+            role_info = category_roles[str(level)]
+            
+            field_value = f"**Color:** {role_info['color']}\n"
+            field_value += f"**Perks:** {', '.join(role_info['perks'])}"
+            
+            embed.add_field(
+                name=f"Level {level} - {role_info['name']}",
+                value=field_value,
+                inline=False
+            )
+    
+    else:
+        # Show overview of all categories
+        category_info = {
+            'text': {'emoji': '💬', 'name': 'Text Chat', 'desc': 'Earned through messaging'},
+            'voice': {'emoji': '🎤', 'name': 'Voice Activity', 'desc': 'Earned through voice participation'},
+            'role': {'emoji': '🎭', 'name': 'Community Role', 'desc': 'Earned through community activities'},
+            'overall': {'emoji': '⭐', 'name': 'Overall Progress', 'desc': 'Combined progress across all categories'}
+        }
+        
+        for cat_key, cat_data in category_info.items():
+            if cat_key in level_roles_config:
+                roles = level_roles_config[cat_key]
+                role_count = len(roles)
+                max_level = max([int(x) for x in roles.keys()]) if roles else 0
+                
+                field_value = f"{cat_data['desc']}\n"
+                field_value += f"**{role_count} roles** available (Level 5-{max_level})\n"
+                field_value += f"Use `/roles {cat_key}` for details"
+                
+                embed.add_field(
+                    name=f"{cat_data['emoji']} {cat_data['name']}",
+                    value=field_value,
+                    inline=True
+                )
+    
+    # Add prestige information
+    prestige_config = config.get('leveling.prestigeSystem', {})
+    if prestige_config.get('enabled'):
+        prestige_levels = prestige_config.get('levels', {})
+        prestige_value = f"Unlock after reaching Level 50 in all categories\n"
+        prestige_value += f"**{len(prestige_levels)} Prestige Levels** available\n"
+        prestige_value += f"Permanent bonuses and exclusive perks"
+        
+        embed.add_field(
+            name="⭐ Prestige System",
+            value=prestige_value,
+            inline=False
+        )
+    
+    embed.set_footer(text="Use /rank to see your current progress • /roles <category> for detailed role info")
+    
+    await ctx.send(embed=embed)
+
+@commands.hybrid_command(name='prestige')
+async def prestige_info(ctx: commands.Context):
+    """View prestige system information and requirements"""
+    prestige_config = config.get('leveling.prestigeSystem', {})
+    
+    if not prestige_config.get('enabled'):
+        await ctx.send("❌ Prestige system is not enabled.")
+        return
+    
+    embed = discord.Embed(
+        title="⭐ Wonder Prestige System",
+        description="*Ultimate achievement for dedicated community members*",
+        color=int('#FFD700'.replace('#', ''), 16)
+    )
+    
+    # Requirements
+    requirements = prestige_config.get('requirements', {})
+    req_value = ""
+    if requirements.get('allCategoriesLevel50'):
+        req_value += "🏆 **Level 50** in all categories (Text, Voice, Role, Overall)\n"
+    if requirements.get('minimumActivity'):
+        req_value += f"📊 **{requirements['minimumActivity']}** minimum activity points\n"
+    if requirements.get('communityContribution'):
+        req_value += f"🤝 **{requirements['communityContribution']}** community contribution points\n"
+    
+    embed.add_field(
+        name="📋 Requirements",
+        value=req_value,
+        inline=False
+    )
+    
+    # Prestige levels
+    levels = prestige_config.get('levels', {})
+    for level in sorted([int(x) for x in levels.keys()]):
+        level_info = levels[str(level)]
+        bonus_percent = int(level_info['bonus'] * 100)
+        
+        embed.add_field(
+            name=f"⭐ {level_info['name']}",
+            value=f"**{bonus_percent}% XP Bonus** for all activities\nExclusive perks and recognition",
+            inline=True
+        )
+    
+    # Benefits
+    rewards = prestige_config.get('rewards', {})
+    benefits_value = ""
+    if rewards.get('prestigeRoles'):
+        benefits_value += "🏆 Exclusive prestige roles with unique colors\n"
+    if rewards.get('specialPerks'):
+        benefits_value += "🎁 Special server perks and privileges\n"
+    if rewards.get('permanentBonuses'):
+        benefits_value += "⚡ Permanent XP bonuses that stack\n"
+    
+    embed.add_field(
+        name="🎁 Benefits",
+        value=benefits_value,
+        inline=False
+    )
+    
+    embed.set_footer(text="Use /rank to check your prestige eligibility")
     
     await ctx.send(embed=embed)
 
@@ -1684,6 +1864,16 @@ def get_command_help(command_name: str) -> str:
             'description': 'List all configured drop channels (Admin only)',
             'parameters': '• No parameters required'
         },
+        'roles': {
+            'usage': '`w.roles [category]` or `/roles [category]`',
+            'description': 'View level roles and requirements for each category',
+            'parameters': '• `category` (optional): text, voice, role, or overall'
+        },
+        'prestige': {
+            'usage': '`w.prestige` or `/prestige`',
+            'description': 'View prestige system information and requirements',
+            'parameters': '• No parameters required'
+        },
         'help': {
             'usage': '`w.help` or `/help`',
             'description': 'Show this help information',
@@ -1761,7 +1951,7 @@ async def get_help_embed_for_user(user: discord.Member, bot: commands.Bot) -> di
     
     embed = discord.Embed(
         title=f"🌌 {config.branding['name']} - Wonder Help",
-        description=f"🐍 **Programming Language:** Python {sys.version.split()[0]}\n*Where Wonder Meets Chrome Dreams*",
+        description=f"*Where Wonder Meets Chrome Dreams*",
         color=int(config.colors['primary'].replace('#', ''), 16)
     )
     
@@ -1796,11 +1986,12 @@ async def get_help_embed_for_user(user: discord.Member, bot: commands.Bot) -> di
     )
     
     embed.add_field(
-        name="🎯 Leveling System",
-        value="**4-Category Progression:**\n"
-              "`w.rank [@user]` - View XP & levels\n"
-              "**Gain XP by:** Chatting (Text), Voice time,\n"
-              "Special activities (Role), Combined (Overall)",
+        name="🎯 Comprehensive Leveling System",
+        value="**4-Category Progression with Roles:**\n"
+              "`w.rank [@user]` - View comprehensive rank\n"
+              "`w.roles [category]` - View level roles & perks\n"
+              "`w.prestige` - View prestige system info\n"
+              "**Categories:** Text, Voice, Community, Overall",
         inline=True
     )
     
@@ -1918,6 +2109,8 @@ async def main():
     
     # Leveling commands
     bot.add_command(rank)
+    bot.add_command(level_roles)
+    bot.add_command(prestige_info)
     
     # Admin commands
     bot.add_command(giveaway_group)

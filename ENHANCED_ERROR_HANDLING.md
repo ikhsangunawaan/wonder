@@ -9,10 +9,11 @@ Bot sekarang memberikan informasi error yang sangat detail untuk setiap command 
 - **Parameter requirements** yang detail
 - **Specific error information**
 
-### 2. Programming Language Information ✅
-- Help embed sekarang menampilkan informasi bahasa pemrograman Python dengan versi
-- Tagline telah dihapus dari help embed
-- Format: `🐍 **Programming Language:** Python 3.13.3`
+### 2. Comprehensive Leveling Roles System ✅
+- **Programming Language Information dihapus** dari help embed sesuai permintaan
+- **Comprehensive leveling roles** dengan 4 kategori progression
+- **24 level roles** total (6 roles per kategori untuk text/voice/role, 5 untuk overall)
+- **5-level prestige system** dengan escalating bonuses (35%-60% XP bonus)
 
 ### 3. Comprehensive Error Types ✅
 Bot sekarang menangani berbagai jenis error dengan pesan yang informatif:

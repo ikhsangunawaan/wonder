@@ -49,6 +49,10 @@ class LevelingSystem:
             'maxLevel': config.get('leveling.maxLevel', 50)
         }
         
+        # Comprehensive role system
+        self.level_roles = config.get('leveling.levelRoles', {})
+        self.prestige_system = config.get('leveling.prestigeSystem', {})
+        
         # Level rewards configuration
         self.level_rewards = {
             'text': {
@@ -310,34 +314,116 @@ class LevelingSystem:
             logging.error(f"Error sending level up message: {error}")
     
     async def get_user_rank(self, user_id: str) -> Optional[Dict[str, Any]]:
-        """Get user's rank information"""
+        """Get comprehensive user rank information across all categories"""
         try:
-            user_level = await database.get_user_level(user_id)
-            if not user_level:
+            user_data = await database.get_user(user_id)
+            if not user_data:
                 return None
             
-            current_level = user_level['level']
-            current_xp = user_level['xp']
+            levels = {}
+            roles_earned = {}
+            next_roles = {}
             
-            # Calculate XP needed for next level
-            if current_level >= self.level_formula['maxLevel']:
-                xp_needed = 0
-                xp_for_next = 0
-            else:
-                xp_for_next = self.get_xp_for_level(current_level + 1)
-                xp_needed = xp_for_next - current_xp
+            # Get information for each category
+            for category in ['text', 'voice', 'role', 'overall']:
+                xp = user_data.get(f'{category}_xp', 0)
+                level = self.level_formula['calculateLevel'](xp)
+                
+                # Calculate XP needed for next level
+                if level >= self.level_formula['maxLevel']:
+                    xp_needed = 0
+                    xp_for_next = 0
+                else:
+                    xp_for_next = self.get_xp_for_level(level + 1)
+                    xp_needed = xp_for_next - xp
+                
+                levels[category] = {
+                    'level': level,
+                    'xp': xp,
+                    'xp_needed': xp_needed,
+                    'xp_for_next': xp_for_next
+                }
+                
+                # Get current and next roles
+                roles_earned[category] = self._get_current_role(category, level)
+                next_roles[category] = self._get_next_role(category, level)
+            
+            # Check prestige eligibility
+            prestige_info = self._check_prestige_eligibility(levels)
             
             return {
-                'level': current_level,
-                'xp': current_xp,
-                'xp_needed': xp_needed,
-                'xp_for_next': xp_for_next,
-                'total_messages': user_level.get('total_messages', 0)
+                'levels': levels,
+                'roles_earned': roles_earned,
+                'next_roles': next_roles,
+                'prestige_info': prestige_info,
+                'total_messages': user_data.get('total_messages', 0),
+                'total_voice_time': user_data.get('total_voice_time', 0),
+                'prestige_level': user_data.get('prestige_level', 0)
             }
             
         except Exception as error:
             logging.error(f"Error getting user rank: {error}")
             return None
+    
+    def _get_current_role(self, category: str, level: int) -> Optional[Dict[str, Any]]:
+        """Get the current role for a category and level"""
+        if category not in self.level_roles:
+            return None
+        
+        category_roles = self.level_roles[category]
+        current_role = None
+        
+        for role_level in sorted([int(x) for x in category_roles.keys()]):
+            if level >= role_level:
+                current_role = {
+                    'level': role_level,
+                    'name': category_roles[str(role_level)]['name'],
+                    'color': category_roles[str(role_level)]['color'],
+                    'perks': category_roles[str(role_level)]['perks']
+                }
+            else:
+                break
+        
+        return current_role
+    
+    def _get_next_role(self, category: str, level: int) -> Optional[Dict[str, Any]]:
+        """Get the next role to achieve for a category"""
+        if category not in self.level_roles:
+            return None
+        
+        category_roles = self.level_roles[category]
+        
+        for role_level in sorted([int(x) for x in category_roles.keys()]):
+            if level < role_level:
+                return {
+                    'level': role_level,
+                    'name': category_roles[str(role_level)]['name'],
+                    'color': category_roles[str(role_level)]['color'],
+                    'perks': category_roles[str(role_level)]['perks'],
+                    'levels_needed': role_level - level
+                }
+        
+        return None
+    
+    def _check_prestige_eligibility(self, levels: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+        """Check if user is eligible for prestige"""
+        if not self.prestige_system.get('enabled'):
+            return {'eligible': False}
+        
+        requirements = self.prestige_system.get('requirements', {})
+        
+        # Check if all categories are at level 50
+        all_max_level = all(levels[cat]['level'] >= 50 for cat in ['text', 'voice', 'role', 'overall'])
+        
+        return {
+            'eligible': all_max_level,
+            'requirements_met': {
+                'all_categories_level_50': all_max_level,
+                'minimum_activity': True,  # Would need to implement activity tracking
+                'community_contribution': True  # Would need to implement contribution tracking
+            },
+            'next_prestige_level': 1  # Would need to get from user data
+        }
 
 # Global leveling system instance (will be initialized with bot client)
 leveling_system = None
