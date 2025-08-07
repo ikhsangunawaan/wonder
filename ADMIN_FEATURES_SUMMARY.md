@@ -55,18 +55,16 @@ Semua command yang menggunakan parameter user, role, atau channel sekarang mendu
 #### User Input Formats:
 - **Mention:** `<@123456789>` atau `<@!123456789>`
 - **User ID:** `123456789`
-- **Username:** `username`
-- **Display Name:** `DisplayName`
 
 #### Role Input Formats:
 - **Mention:** `<@&123456789>`
 - **Role ID:** `123456789`
-- **Role Name:** `Admin`
 
 #### Channel Input Formats:
 - **Mention:** `<#123456789>`
 - **Channel ID:** `123456789`
-- **Channel Name:** `general`
+
+**Security Note:** Name-based parsing dihapus untuk mencegah targeting user/role/channel yang salah jika ada nama yang sama.
 
 #### Updated Commands:
 - `w.balance <user>` - Supports flexible user input
@@ -118,6 +116,8 @@ def parse_user_mention_or_id(user_input: str, guild: discord.Guild) -> discord.M
 def parse_role_mention_or_id(role_input: str, guild: discord.Guild) -> discord.Role
 def parse_channel_mention_or_id(channel_input: str, guild: discord.Guild) -> discord.TextChannel
 ```
+
+**Security Enhancement:** Parsing functions hanya menerima mention dan ID untuk mencegah targeting yang salah.
 
 ### Database Integration:
 - **Server Settings:** Category enable/disable state

@@ -248,13 +248,13 @@ class WonderBot(commands.Bot):
 
 # Economy Commands (Hybrid: both prefix and slash)
 @commands.hybrid_command(name='balance', aliases=['bal'])
-@app_commands.describe(user='User to check balance for (mention, ID, or username - optional)')
+@app_commands.describe(user='User to check balance for (mention or ID - optional)')
 async def balance(ctx: commands.Context, user: str = None):
     """Check your balance or another user's balance"""
     if user:
         target_user = parse_user_mention_or_id(user, ctx.guild)
         if not target_user:
-            await send_command_error(ctx, "member_not_found", "balance", f"User '{user}' not found. Use mention, ID, or username.")
+            await send_command_error(ctx, "member_not_found", "balance", f"User '{user}' not found. Use mention (@user) or ID.")
             return
     else:
         target_user = ctx.author
@@ -594,13 +594,13 @@ async def slots(ctx: commands.Context, bet_amount: int):
     # No need to send another message if animation was shown
 
 @commands.hybrid_command(name='gamestats')
-@app_commands.describe(user='User to check gambling stats for (mention, ID, or username - optional)')
+@app_commands.describe(user='User to check gambling stats for (mention or ID - optional)')
 async def gamestats(ctx: commands.Context, user: str = None):
     """View gambling statistics"""
     if user:
         target_user = parse_user_mention_or_id(user, ctx.guild)
         if not target_user:
-            await send_command_error(ctx, "member_not_found", "gamestats", f"User '{user}' not found. Use mention, ID, or username.")
+            await send_command_error(ctx, "member_not_found", "gamestats", f"User '{user}' not found. Use mention (@user) or ID.")
             return
     else:
         target_user = ctx.author
@@ -655,13 +655,13 @@ async def use_item(ctx: commands.Context, item_id: str):
 
 # Leveling Commands
 @commands.hybrid_command(name='rank')
-@app_commands.describe(user='User to check rank for (mention, ID, or username - optional)')
+@app_commands.describe(user='User to check rank for (mention or ID - optional)')
 async def rank(ctx: commands.Context, user: str = None):
     """View comprehensive rank information across all categories"""
     if user:
         target_user = parse_user_mention_or_id(user, ctx.guild)
         if not target_user:
-            await send_command_error(ctx, "member_not_found", "rank", f"User '{user}' not found. Use mention, ID, or username.")
+            await send_command_error(ctx, "member_not_found", "rank", f"User '{user}' not found. Use mention (@user) or ID.")
             return
     else:
         target_user = ctx.author
@@ -956,7 +956,7 @@ async def toggle_category(ctx: commands.Context, category: str, enabled: bool):
 
 @commands.hybrid_command(name='set-user-xp')
 @commands.has_permissions(administrator=True)
-@app_commands.describe(user='User to modify (mention, ID, or username)', category='XP category (text/voice/role/overall)', amount='XP amount to set')
+@app_commands.describe(user='User to modify (mention or ID)', category='XP category (text/voice/role/overall)', amount='XP amount to set')
 async def set_user_xp(ctx: commands.Context, user: str, category: str, amount: int):
     """Set user's XP in a specific category (Admin only)"""
     valid_categories = ['text', 'voice', 'role', 'overall']
@@ -967,7 +967,7 @@ async def set_user_xp(ctx: commands.Context, user: str, category: str, amount: i
     
     target_user = parse_user_mention_or_id(user, ctx.guild)
     if not target_user:
-        await send_command_error(ctx, "member_not_found", "set-user-xp", f"User '{user}' not found. Use mention, ID, or username.")
+        await send_command_error(ctx, "member_not_found", "set-user-xp", f"User '{user}' not found. Use mention (@user) or ID.")
         return
     
     if amount < 0:
@@ -1026,7 +1026,7 @@ async def set_user_xp(ctx: commands.Context, user: str, category: str, amount: i
 
 @commands.hybrid_command(name='add-user-xp')
 @commands.has_permissions(administrator=True)
-@app_commands.describe(user='User to modify (mention, ID, or username)', category='XP category (text/voice/role/overall)', amount='XP amount to add')
+@app_commands.describe(user='User to modify (mention or ID)', category='XP category (text/voice/role/overall)', amount='XP amount to add')
 async def add_user_xp(ctx: commands.Context, user: str, category: str, amount: int):
     """Add XP to user in a specific category (Admin only)"""
     valid_categories = ['text', 'voice', 'role', 'overall']
@@ -1037,7 +1037,7 @@ async def add_user_xp(ctx: commands.Context, user: str, category: str, amount: i
     
     target_user = parse_user_mention_or_id(user, ctx.guild)
     if not target_user:
-        await send_command_error(ctx, "member_not_found", "add-user-xp", f"User '{user}' not found. Use mention, ID, or username.")
+        await send_command_error(ctx, "member_not_found", "add-user-xp", f"User '{user}' not found. Use mention (@user) or ID.")
         return
     
     category = category.lower()
@@ -1094,7 +1094,7 @@ async def add_user_xp(ctx: commands.Context, user: str, category: str, amount: i
 
 @commands.hybrid_command(name='reset-user-xp')
 @commands.has_permissions(administrator=True)
-@app_commands.describe(user='User to reset (mention, ID, or username)', category='XP category to reset (text/voice/role/overall/all)')
+@app_commands.describe(user='User to reset (mention or ID)', category='XP category to reset (text/voice/role/overall/all)')
 async def reset_user_xp(ctx: commands.Context, user: str, category: str = 'all'):
     """Reset user's XP in specific category or all categories (Admin only)"""
     valid_categories = ['text', 'voice', 'role', 'overall', 'all']
@@ -1105,7 +1105,7 @@ async def reset_user_xp(ctx: commands.Context, user: str, category: str = 'all')
     
     target_user = parse_user_mention_or_id(user, ctx.guild)
     if not target_user:
-        await send_command_error(ctx, "member_not_found", "reset-user-xp", f"User '{user}' not found. Use mention, ID, or username.")
+        await send_command_error(ctx, "member_not_found", "reset-user-xp", f"User '{user}' not found. Use mention (@user) or ID.")
         return
     
     category = category.lower()
@@ -1195,12 +1195,12 @@ async def reset_user_xp(ctx: commands.Context, user: str, category: str = 'all')
 
 @commands.hybrid_command(name='set-user-currency')
 @commands.has_permissions(administrator=True)
-@app_commands.describe(user='User to modify (mention, ID, or username)', amount='Currency amount to set')
+@app_commands.describe(user='User to modify (mention or ID)', amount='Currency amount to set')
 async def set_user_currency(ctx: commands.Context, user: str, amount: int):
     """Set user's currency balance (Admin only)"""
     target_user = parse_user_mention_or_id(user, ctx.guild)
     if not target_user:
-        await send_command_error(ctx, "member_not_found", "set-user-currency", f"User '{user}' not found. Use mention, ID, or username.")
+        await send_command_error(ctx, "member_not_found", "set-user-currency", f"User '{user}' not found. Use mention (@user) or ID.")
         return
     
     if amount < 0:
@@ -1242,12 +1242,12 @@ async def set_user_currency(ctx: commands.Context, user: str, amount: int):
 
 @commands.hybrid_command(name='add-user-currency')
 @commands.has_permissions(administrator=True)
-@app_commands.describe(user='User to modify (mention, ID, or username)', amount='Currency amount to add (use negative to subtract)')
+@app_commands.describe(user='User to modify (mention or ID)', amount='Currency amount to add (use negative to subtract)')
 async def add_user_currency(ctx: commands.Context, user: str, amount: int):
     """Add currency to user's balance (Admin only)"""
     target_user = parse_user_mention_or_id(user, ctx.guild)
     if not target_user:
-        await send_command_error(ctx, "member_not_found", "add-user-currency", f"User '{user}' not found. Use mention, ID, or username.")
+        await send_command_error(ctx, "member_not_found", "add-user-currency", f"User '{user}' not found. Use mention (@user) or ID.")
         return
     
     # Add user currency
@@ -1595,13 +1595,13 @@ async def quick_giveaway(ctx: commands.Context, duration: str, winners: int, *, 
 # Admin Commands (Hybrid: both prefix and slash)
 @commands.hybrid_command(name='adddrops')
 @commands.has_permissions(manage_guild=True)
-@app_commands.describe(channel='Channel to add to drop system (mention, ID, or name - optional, defaults to current)')
+@app_commands.describe(channel='Channel to add to drop system (mention or ID - optional, defaults to current)')
 async def add_drop_channel(ctx: commands.Context, channel: str = None):
     """Add a channel to the wonder drop system (Admin only)"""
     if channel:
         target_channel = parse_channel_mention_or_id(channel, ctx.guild)
         if not target_channel:
-            await send_command_error(ctx, "channel_not_found", "adddrops", f"Channel '{channel}' not found. Use mention, ID, or name.")
+            await send_command_error(ctx, "channel_not_found", "adddrops", f"Channel '{channel}' not found. Use mention (#channel) or ID.")
             return
     else:
         target_channel = ctx.channel
@@ -1622,13 +1622,13 @@ async def add_drop_channel(ctx: commands.Context, channel: str = None):
 
 @commands.hybrid_command(name='removedrops')
 @commands.has_permissions(manage_guild=True)
-@app_commands.describe(channel='Channel to remove from drop system (mention, ID, or name - optional, defaults to current)')
+@app_commands.describe(channel='Channel to remove from drop system (mention or ID - optional, defaults to current)')
 async def remove_drop_channel(ctx: commands.Context, channel: str = None):
     """Remove a channel from the wonder drop system (Admin only)"""
     if channel:
         target_channel = parse_channel_mention_or_id(channel, ctx.guild)
         if not target_channel:
-            await send_command_error(ctx, "channel_not_found", "removedrops", f"Channel '{channel}' not found. Use mention, ID, or name.")
+            await send_command_error(ctx, "channel_not_found", "removedrops", f"Channel '{channel}' not found. Use mention (#channel) or ID.")
             return
     else:
         target_channel = ctx.channel
@@ -1673,7 +1673,7 @@ async def force_drop(ctx: commands.Context, amount: int = None, rarity: str = No
 
 @commands.hybrid_command(name='configdrops')
 @commands.has_permissions(administrator=True)
-@app_commands.describe(channel='Channel to configure (mention, ID, or name)', setting='Setting to change (rarity_mult, amount_mult, frequency, rarities)', value='New value for the setting')
+@app_commands.describe(channel='Channel to configure (mention or ID)', setting='Setting to change (rarity_mult, amount_mult, frequency, rarities)', value='New value for the setting')
 async def configure_drops(ctx: commands.Context, channel: str, setting: str = None, value: str = None):
     """Configure advanced drop settings for a channel (Admin only)
     
@@ -1685,7 +1685,7 @@ async def configure_drops(ctx: commands.Context, channel: str, setting: str = No
     """
     target_channel = parse_channel_mention_or_id(channel, ctx.guild)
     if not target_channel:
-        await send_command_error(ctx, "channel_not_found", "configdrops", f"Channel '{channel}' not found. Use mention, ID, or name.")
+        await send_command_error(ctx, "channel_not_found", "configdrops", f"Channel '{channel}' not found. Use mention (#channel) or ID.")
         return
     
     if not setting:
@@ -2213,7 +2213,7 @@ def is_owner(user: discord.Member, bot: commands.Bot) -> bool:
     return user.id == bot.owner_id
 
 def parse_user_mention_or_id(user_input: str, guild: discord.Guild) -> discord.Member:
-    """Parse user from mention, ID, or username"""
+    """Parse user from mention or ID only"""
     if not user_input:
         return None
     
@@ -2230,17 +2230,12 @@ def parse_user_mention_or_id(user_input: str, guild: discord.Guild) -> discord.M
         user_id = int(user_input)
         return guild.get_member(user_id)
     except ValueError:
-        pass
+        return None
     
-    # Try username/display name
-    member = discord.utils.get(guild.members, name=user_input)
-    if not member:
-        member = discord.utils.get(guild.members, display_name=user_input)
-    
-    return member
+    return None
 
 def parse_role_mention_or_id(role_input: str, guild: discord.Guild) -> discord.Role:
-    """Parse role from mention, ID, or name"""
+    """Parse role from mention or ID only"""
     if not role_input:
         return None
     
@@ -2257,13 +2252,12 @@ def parse_role_mention_or_id(role_input: str, guild: discord.Guild) -> discord.R
         role_id = int(role_input)
         return guild.get_role(role_id)
     except ValueError:
-        pass
+        return None
     
-    # Try role name
-    return discord.utils.get(guild.roles, name=role_input)
+    return None
 
 def parse_channel_mention_or_id(channel_input: str, guild: discord.Guild) -> discord.TextChannel:
-    """Parse channel from mention, ID, or name"""
+    """Parse channel from mention or ID only"""
     if not channel_input:
         return None
     
@@ -2280,10 +2274,9 @@ def parse_channel_mention_or_id(channel_input: str, guild: discord.Guild) -> dis
         channel_id = int(channel_input)
         return guild.get_channel(channel_id)
     except ValueError:
-        pass
+        return None
     
-    # Try channel name
-    return discord.utils.get(guild.text_channels, name=channel_input)
+    return None
 
 def get_command_help(command_name: str) -> str:
     """Get detailed help information for a specific command"""
@@ -2291,7 +2284,7 @@ def get_command_help(command_name: str) -> str:
         'balance': {
             'usage': '`w.balance [@user]` or `/balance [user]`',
             'description': 'Check your balance or another user\'s balance',
-            'parameters': '• `user` (optional): User to check balance for'
+            'parameters': '• `user` (optional): User mention (@user) or ID to check balance for'
         },
         'daily': {
             'usage': '`w.daily` or `/daily`',
@@ -2326,7 +2319,7 @@ def get_command_help(command_name: str) -> str:
         'rank': {
             'usage': '`w.rank [@user]` or `/rank [user]`',
             'description': 'View your or someone\'s rank and XP',
-            'parameters': '• `user` (optional): User to check rank for'
+            'parameters': '• `user` (optional): User mention (@user) or ID to check rank for'
         },
         'coinflip': {
             'usage': '`w.coinflip <amount> <choice>` or `/coinflip <amount> <choice>`',
@@ -2346,7 +2339,7 @@ def get_command_help(command_name: str) -> str:
         'gamestats': {
             'usage': '`w.gamestats [@user]` or `/gamestats [user]`',
             'description': 'View gambling statistics',
-            'parameters': '• `user` (optional): User to check stats for'
+            'parameters': '• `user` (optional): User mention (@user) or ID to check stats for'
         },
         'quickgiveaway': {
             'usage': '`w.quickgiveaway <duration> <winners> <prize>` or `/quickgiveaway <duration> <winners> <prize>`',
@@ -2356,12 +2349,12 @@ def get_command_help(command_name: str) -> str:
         'adddrops': {
             'usage': '`w.adddrops [#channel]` or `/adddrops [channel]`',
             'description': 'Add a channel to the drop system (Admin only)',
-            'parameters': '• `channel` (optional): Channel to add (defaults to current)'
+            'parameters': '• `channel` (optional): Channel mention (#channel) or ID (defaults to current)'
         },
         'removedrops': {
             'usage': '`w.removedrops [#channel]` or `/removedrops [channel]`',
             'description': 'Remove a channel from the drop system (Admin only)',
-            'parameters': '• `channel` (optional): Channel to remove (defaults to current)'
+            'parameters': '• `channel` (optional): Channel mention (#channel) or ID (defaults to current)'
         },
         'forcedrop': {
             'usage': '`w.forcedrop [#channel]` or `/forcedrop [channel]`',
@@ -2371,7 +2364,7 @@ def get_command_help(command_name: str) -> str:
         'configdrops': {
             'usage': '`w.configdrops <#channel> [setting] [value]` or `/configdrops <channel> [setting] [value]`',
             'description': 'Configure drop settings for a channel (Admin only)',
-            'parameters': '• `channel` (required): Channel to configure\n• `setting` (optional): rarity_mult, amount_mult, frequency, rarities\n• `value` (optional): New value for the setting'
+            'parameters': '• `channel` (required): Channel mention (#channel) or ID\n• `setting` (optional): rarity_mult, amount_mult, frequency, rarities\n• `value` (optional): New value for the setting'
         },
         'dropchannels': {
             'usage': '`w.dropchannels` or `/dropchannels`',
@@ -2396,27 +2389,27 @@ def get_command_help(command_name: str) -> str:
         'set-user-xp': {
             'usage': '`w.set-user-xp <user> <category> <amount>` or `/set-user-xp <user> <category> <amount>`',
             'description': 'Set user\'s XP in a specific category (Admin only)',
-            'parameters': '• `user` (required): User mention, ID, or username\n• `category` (required): text, voice, role, or overall\n• `amount` (required): XP amount to set'
+            'parameters': '• `user` (required): User mention (@user) or ID\n• `category` (required): text, voice, role, or overall\n• `amount` (required): XP amount to set'
         },
         'add-user-xp': {
             'usage': '`w.add-user-xp <user> <category> <amount>` or `/add-user-xp <user> <category> <amount>`',
             'description': 'Add XP to user in a specific category (Admin only)',
-            'parameters': '• `user` (required): User mention, ID, or username\n• `category` (required): text, voice, role, or overall\n• `amount` (required): XP amount to add (can be negative)'
+            'parameters': '• `user` (required): User mention (@user) or ID\n• `category` (required): text, voice, role, or overall\n• `amount` (required): XP amount to add (can be negative)'
         },
         'reset-user-xp': {
             'usage': '`w.reset-user-xp <user> [category]` or `/reset-user-xp <user> [category]`',
             'description': 'Reset user\'s XP in specific category or all categories (Admin only)',
-            'parameters': '• `user` (required): User mention, ID, or username\n• `category` (optional): text, voice, role, overall, or all (default: all)'
+            'parameters': '• `user` (required): User mention (@user) or ID\n• `category` (optional): text, voice, role, overall, or all (default: all)'
         },
         'set-user-currency': {
             'usage': '`w.set-user-currency <user> <amount>` or `/set-user-currency <user> <amount>`',
             'description': 'Set user\'s currency balance (Admin only)',
-            'parameters': '• `user` (required): User mention, ID, or username\n• `amount` (required): Currency amount to set'
+            'parameters': '• `user` (required): User mention (@user) or ID\n• `amount` (required): Currency amount to set'
         },
         'add-user-currency': {
             'usage': '`w.add-user-currency <user> <amount>` or `/add-user-currency <user> <amount>`',
             'description': 'Add currency to user\'s balance (Admin only)',
-            'parameters': '• `user` (required): User mention, ID, or username\n• `amount` (required): Currency amount to add (can be negative)'
+            'parameters': '• `user` (required): User mention (@user) or ID\n• `amount` (required): Currency amount to add (can be negative)'
         },
         'help': {
             'usage': '`w.help` or `/help`',
