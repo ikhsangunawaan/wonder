@@ -658,6 +658,17 @@ async def use_item(ctx: commands.Context, item_id: str):
 @app_commands.describe(user='User to check rank for (mention or ID - optional)')
 async def rank(ctx: commands.Context, user: str = None):
     """View comprehensive rank information across all categories"""
+    # Check if any leveling categories are enabled
+    category_settings = await ctx.bot.database.get_category_settings(str(ctx.guild.id))
+    if not any(category_settings.values()):
+        embed = discord.Embed(
+            title="❌ Leveling Disabled",
+            description="All leveling categories are currently disabled on this server.",
+            color=int(config.colors['error'].replace('#', ''), 16)
+        )
+        await ctx.send(embed=embed)
+        return
+    
     if user:
         target_user = parse_user_mention_or_id(user, ctx.guild)
         if not target_user:
@@ -686,6 +697,10 @@ async def rank(ctx: commands.Context, user: str = None):
     }
     
     for category, info in categories.items():
+        # Only show enabled categories
+        if not category_settings.get(category, True):
+            continue
+            
         level_data = rank_info['levels'].get(category, {})
         current_role = rank_info['roles_earned'].get(category)
         next_role = rank_info['next_roles'].get(category)
@@ -747,6 +762,9 @@ async def rank(ctx: commands.Context, user: str = None):
 @app_commands.describe(category='Category to view roles for (text/voice/role/overall)')
 async def level_roles(ctx: commands.Context, category: str = None):
     """View all available level roles and their requirements"""
+    # Check category settings
+    category_settings = await ctx.bot.database.get_category_settings(str(ctx.guild.id))
+    
     level_roles_config = config.get('leveling.levelRoles', {})
     
     if not level_roles_config:
@@ -908,49 +926,46 @@ async def toggle_category(ctx: commands.Context, category: str, enabled: bool):
     
     category = category.lower()
     
-    # Get current server settings
-    server_settings = await database.get_server_settings(str(ctx.guild.id))
-    if not server_settings:
-        server_settings = {'guild_id': str(ctx.guild.id)}
+    # Update category setting in database
+    success = await ctx.bot.database.set_category_enabled(str(ctx.guild.id), category, enabled)
     
-    # Update category setting
-    if 'leveling_categories' not in server_settings:
-        server_settings['leveling_categories'] = {
-            'text': True,
-            'voice': True,
-            'role': True,
-            'overall': True
-        }
-    
-    server_settings['leveling_categories'][category] = enabled
-    success = await database.save_server_settings(server_settings)
-    
-    if success:
-        status = "enabled" if enabled else "disabled"
-        embed = discord.Embed(
-            title=f"⚙️ Category {status.title()}",
-            description=f"**{category.title()}** leveling category has been **{status}**.",
-            color=int(config.colors['success' if enabled else 'warning'].replace('#', ''), 16)
-        )
-        
-        if enabled:
-            embed.add_field(
-                name="✅ Category Active",
-                value=f"Users will now earn XP in the **{category}** category.",
-                inline=False
-            )
-        else:
-            embed.add_field(
-                name="⏸️ Category Paused",
-                value=f"Users will no longer earn XP in the **{category}** category.\nExisting progress is preserved.",
-                inline=False
-            )
-    else:
+    if not success:
         embed = discord.Embed(
             title="❌ Error",
             description="Failed to update category setting. Please try again.",
             color=int(config.colors['error'].replace('#', ''), 16)
         )
+        await ctx.send(embed=embed)
+        return
+    
+    status = "enabled" if enabled else "disabled"
+    color = int(config.colors['success' if enabled else 'warning'].replace('#', ''), 16)
+    
+    embed = discord.Embed(
+        title=f"⚙️ Category {status.title()}",
+        description=f"**{category.title()}** category has been **{status}** for this server.",
+        color=color
+    )
+    
+    embed.add_field(
+        name="🔄 Effect",
+        value=f"All {category} leveling features are now **{status}**.\n"
+              f"This affects: XP gain, level up messages, rank display, and related commands.",
+        inline=False
+    )
+    
+    # Show current status of all categories
+    current_settings = await ctx.bot.database.get_category_settings(str(ctx.guild.id))
+    status_text = []
+    for cat, is_enabled in current_settings.items():
+        status_emoji = "✅" if is_enabled else "❌"
+        status_text.append(f"{status_emoji} **{cat.title()}**: {'Enabled' if is_enabled else 'Disabled'}")
+    
+    embed.add_field(
+        name="📋 Current Category Status",
+        value="\n".join(status_text),
+        inline=False
+    )
     
     await ctx.send(embed=embed)
 
@@ -963,6 +978,19 @@ async def set_user_xp(ctx: commands.Context, user: str, category: str, amount: i
     
     if category.lower() not in valid_categories:
         await send_command_error(ctx, "bad_argument", "set-user-xp", f"Category must be one of: {', '.join(valid_categories)}")
+        return
+    
+    category = category.lower()
+    
+    # Check if category is enabled
+    if not await ctx.bot.database.is_category_enabled(str(ctx.guild.id), category):
+        embed = discord.Embed(
+            title="❌ Category Disabled",
+            description=f"The **{category}** category is currently disabled on this server.\n"
+                       f"Enable it first with `w.toggle-category {category} true`",
+            color=int(config.colors['error'].replace('#', ''), 16)
+        )
+        await ctx.send(embed=embed)
         return
     
     target_user = parse_user_mention_or_id(user, ctx.guild)
@@ -1033,6 +1061,19 @@ async def add_user_xp(ctx: commands.Context, user: str, category: str, amount: i
     
     if category.lower() not in valid_categories:
         await send_command_error(ctx, "bad_argument", "add-user-xp", f"Category must be one of: {', '.join(valid_categories)}")
+        return
+    
+    category = category.lower()
+    
+    # Check if category is enabled
+    if not await ctx.bot.database.is_category_enabled(str(ctx.guild.id), category):
+        embed = discord.Embed(
+            title="❌ Category Disabled",
+            description=f"The **{category}** category is currently disabled on this server.\n"
+                       f"Enable it first with `w.toggle-category {category} true`",
+            color=int(config.colors['error'].replace('#', ''), 16)
+        )
+        await ctx.send(embed=embed)
         return
     
     target_user = parse_user_mention_or_id(user, ctx.guild)
@@ -1109,6 +1150,18 @@ async def reset_user_xp(ctx: commands.Context, user: str, category: str = 'all')
         return
     
     category = category.lower()
+    
+    # Check if specific category is enabled (skip for 'all')
+    if category != 'all':
+        if not await ctx.bot.database.is_category_enabled(str(ctx.guild.id), category):
+            embed = discord.Embed(
+                title="❌ Category Disabled",
+                description=f"The **{category}** category is currently disabled on this server.\n"
+                           f"Enable it first with `w.toggle-category {category} true`",
+                color=int(config.colors['error'].replace('#', ''), 16)
+            )
+            await ctx.send(embed=embed)
+            return
     
     # Confirmation for reset
     class ConfirmResetView(discord.ui.View):
@@ -1328,9 +1381,9 @@ def parse_role_mentions(role_str: str, guild: discord.Guild) -> List[discord.Rol
     
     return roles
 
-@commands.group(name='giveaway', aliases=['ga'], invoke_without_command=True)
+@commands.hybrid_command(name='giveaway-info', aliases=['giveaway', 'ga'])
 @commands.has_permissions(manage_guild=True)
-async def giveaway_group(ctx: commands.Context):
+async def giveaway_info(ctx: commands.Context):
     """Advanced giveaway system - Use subcommands for specific actions"""
     embed = discord.Embed(
         title="🎉 Advanced Giveaway System",
@@ -1387,9 +1440,10 @@ async def giveaway_group(ctx: commands.Context):
     
     await ctx.send(embed=embed)
 
-@giveaway_group.command(name='create', aliases=['c'])
+@commands.hybrid_command(name='giveaway-create', aliases=['giveaway-c'])
 @commands.has_permissions(manage_guild=True)
-async def giveaway_create(ctx: commands.Context, prize: str, duration: str, *args):
+@app_commands.describe(prize='Prize for the giveaway', duration='Duration (e.g., 1h, 2d, 1w)', options='Advanced options (comma-separated)')
+async def giveaway_create(ctx: commands.Context, prize: str, duration: str, options: str = None):
     """Create an advanced giveaway with comprehensive options
     
     Examples:
@@ -1504,8 +1558,9 @@ async def giveaway_create(ctx: commands.Context, prize: str, duration: str, *arg
     
     await ctx.send(embed=embed)
 
-@giveaway_group.command(name='end', aliases=['stop'])
+@commands.hybrid_command(name='giveaway-end', aliases=['giveaway-stop'])
 @commands.has_permissions(manage_guild=True)
+@app_commands.describe(giveaway_id='ID of the giveaway to end')
 async def giveaway_end(ctx: commands.Context, giveaway_id: int):
     """Manually end an active giveaway
     
@@ -1522,8 +1577,9 @@ async def giveaway_end(ctx: commands.Context, giveaway_id: int):
     
     await ctx.send(embed=embed)
 
-@giveaway_group.command(name='reroll', aliases=['r'])
+@commands.hybrid_command(name='giveaway-reroll', aliases=['giveaway-r'])
 @commands.has_permissions(manage_guild=True)
+@app_commands.describe(giveaway_id='ID of the giveaway to reroll', new_winner_count='New number of winners (optional)')
 async def giveaway_reroll(ctx: commands.Context, giveaway_id: int, new_winner_count: Optional[int] = None):
     """Reroll winners for a completed giveaway
     
@@ -1544,8 +1600,9 @@ async def giveaway_reroll(ctx: commands.Context, giveaway_id: int, new_winner_co
     
     await ctx.send(embed=embed)
 
-@giveaway_group.command(name='list', aliases=['l'])
+@commands.hybrid_command(name='giveaway-list', aliases=['giveaway-l'])
 @commands.has_permissions(manage_guild=True)
+@app_commands.describe(show_all='Show all giveaways including completed ones (optional)')
 async def giveaway_list(ctx: commands.Context, show_all: Optional[str] = None):
     """List giveaways in this server
     
@@ -2544,12 +2601,13 @@ async def get_help_embed_for_user(user: discord.Member, bot: commands.Bot) -> di
     )
     
     giveaway_commands = "**Community Events:**\n" \
-                       "`w.giveaway create` - Advanced giveaway\n" \
-                       "`w.giveaway list` - View active\n"
+                       "`w.giveaway-create` `/giveaway-create` - Advanced giveaway\n" \
+                       "`w.giveaway-list` `/giveaway-list` - View active\n"
     
     if is_user_admin:
-        giveaway_commands += "`w.quickgiveaway` - Quick setup (Admin)\n" \
-                           "`w.giveaway end/reroll` - Manage (Admin)"
+        giveaway_commands += "`w.quickgiveaway` `/quickgiveaway` - Quick setup (Admin)\n" \
+                           "`w.giveaway-end` `/giveaway-end` - End giveaway (Admin)\n" \
+                           "`w.giveaway-reroll` `/giveaway-reroll` - Reroll (Admin)"
     
     embed.add_field(
         name="🎉 Giveaway System",
@@ -2670,11 +2728,17 @@ async def main():
     bot.add_command(add_user_currency)
     
     # Admin commands
-    bot.add_command(giveaway_group)
+    bot.add_command(giveaway_info)
+    bot.add_command(giveaway_create)
+    bot.add_command(giveaway_end)
+    bot.add_command(giveaway_reroll)
+    bot.add_command(giveaway_list)
     bot.add_command(quick_giveaway)
     bot.add_command(add_drop_channel)
     bot.add_command(remove_drop_channel)
     bot.add_command(force_drop)
+    bot.add_command(configure_drops)
+    bot.add_command(drop_channels)
     
     # Help command
     bot.add_command(help_command)
