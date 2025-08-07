@@ -7,21 +7,24 @@
     "workAmount": 50
   },
   "branding": {
-    "name": "Wonderkind",
-    "tagline": "Where Wonder Meets Chrome Dreams",
+    "name": "Wonder Discord Bot",
+    "tagline": "Python Edition",
     "version": "2.0.0",
-    "theme": "Wonderkind Dream Aesthetic"
+    "theme": "Dreamy Wonder meets Chrome"
   },
-  "booster": {
-    "dailyBonus": 50,
-    "workBonus": 25,
-    "exclusiveChannels": true
-  },
-  "premium": {
-    "dailyBonus": 100,
-    "workBonus": 50,
-    "exclusiveChannels": true,
-    "customColor": true
+  "multipliers": {
+    "booster": {
+      "daily": 1.5,
+      "work": 1.5,
+      "drops": 1.25,
+      "xp": 1.5
+    },
+    "premium": {
+      "daily": 2.0,
+      "work": 2.0,
+      "drops": 1.5,
+      "xp": 1.75
+    }
   },
   "games": {
     "coinflip": {
@@ -37,14 +40,23 @@
       "maxBet": 200
     }
   },
+  "cooldowns": {
+    "daily": 1440,
+    "work": 60,
+    "coinflip": 2,
+    "dice": 3,
+    "slots": 5,
+    "text_xp": 1,
+    "use_item": 1
+  },
   "colors": {
     "primary": "#B8C5D6",
-    "secondary": "#9BADBE", 
-    "accent": "#88B5B1",
+    "secondary": "#A89CC8",
     "success": "#8FBC8F",
     "error": "#CD919E",
     "warning": "#E6B077",
     "info": "#87CEEB",
+    "accent": "#88B5B1",
     "royal": "#A89CC8",
     "luxury": "#D8B4DA",
     "kingdom": "#D4E0ED",
@@ -52,41 +64,31 @@
     "text": "#F5F5F0"
   },
   "theme": {
-    "name": "Wonderkind",
-    "style": "wonderchrome",
+    "name": "Wonder Dreams",
+    "style": "chrome-wonder",
     "emojis": {
-      "crown": "🌌",
-      "gem": "🔮",
+      "wonder": "✨",
+      "mystic": "🔮",
       "star": "⭐",
-      "castle": "🏰",
+      "peace": "🌙",
       "kingdom": "🌌",
-      "royal": "🎭",
+      "royal": "👑",
       "diamond": "💎",
-      "magic": "✨",
-      "throne": "🪄",
-      "scepter": "⭐",
+      "magic": "🪄",
+      "chrome": "🌐",
       "treasure": "💰",
       "medal": "🌟",
-      "ribbon": "🎀",
-      "pearl": "🦋"
+      "dream": "💭",
+      "crystal": "🦋"
     },
     "prefixes": {
-      "royal": "『WONDER』",
-      "luxury": "『DREAM』", 
-      "kingdom": "『KINGDOM』",
-      "legend": "『MYSTIC』",
-      "elite": "『CHROME』",
-      "majestic": "『GENTLE』"
+      "wonder": "『WONDER』",
+      "dream": "『DREAM』", 
+      "mystic": "『MYSTIC』",
+      "chrome": "『CHROME』",
+      "gentle": "『GENTLE』",
+      "peaceful": "『PEACEFUL』"
     }
-  },
-  "cooldowns": {
-    "daily": 1440,
-    "work": 60,
-    "coinflip": 0.5,
-    "dice": 1,
-    "slots": 1.5,
-    "mystery_box": 30,
-    "use_item": 1
   },
   "shop": {
     "categories": ["consumables", "collectibles", "profile", "special"],
@@ -113,37 +115,26 @@
   "leveling": {
     "enabled": true,
     "maxLevel": 50,
+    "categories": ["text", "voice", "role", "overall"],
     "xp": {
       "text": {
         "base": 15,
-        "bonus": 5,
-        "cooldown": 60000,
-        "maxPerMessage": 25,
-        "multipliers": {
-          "booster": 1.5,
-          "premium": 1.75
-        }
+        "bonus": 10,
+        "cooldown": 60,
+        "maxPerMessage": 25
       },
       "voice": {
         "base": 10,
         "bonus": 5,
-        "minDuration": 60000,
-        "requiresUnmuted": true,
-        "multipliers": {
-          "booster": 1.5,
-          "premium": 1.75
-        }
+        "minDuration": 60,
+        "requiresUnmuted": true
       },
       "role": {
         "dailyLogin": 50,
         "messageStreak": 25,
         "voiceStreak": 30,
         "helpingOthers": 100,
-        "eventParticipation": 200,
-        "multipliers": {
-          "booster": 1.25,
-          "premium": 1.5
-        }
+        "eventParticipation": 200
       }
     },
     "rewards": {
@@ -152,10 +143,24 @@
       "currencyRewards": true,
       "roleRewards": true,
       "titleRewards": true
+    }
+  },
+  "drops": {
+    "minAmount": 50,
+    "maxAmount": 500,
+    "minInterval": 1800,
+    "maxInterval": 10800,
+    "collectTime": 60,
+    "rarities": {
+      "common": {"chance": 0.84, "multiplier": 1},
+      "rare": {"chance": 0.10, "multiplier": 3},
+      "epic": {"chance": 0.05, "multiplier": 5},
+      "legendary": {"chance": 0.01, "multiplier": 10}
     },
-    "leaderboard": {
-      "maxDisplayed": 15,
-      "updateInterval": 300000
+    "collectionTypes": {
+      "standard": {"multiplier": 1.0},
+      "quick": {"multiplier": 2.0, "slots": 3},
+      "lucky": {"multiplier": 1.5, "chance": 0.3}
     }
   }
 }

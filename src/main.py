@@ -216,13 +216,32 @@ async def balance(ctx: commands.Context, user: discord.Member = None):
     
     balance = user_data['balance'] if user_data else 0
     
+    # Check if user has premium role for special styling
+    role_status = "✨ Wonder Dreamer"
+    role_color = config.colors['primary']
+    
+    if any(role.name.lower() in ['premium', 'vip'] for role in target_user.roles):
+        role_status = "🌟 Premium Dreamer"
+        role_color = config.colors['royal']
+    elif target_user.premium_since:
+        role_status = "💫 Server Booster"
+        role_color = config.colors['luxury']
+    
     embed = discord.Embed(
-        title=f"✨ Wonder Balance",
-        description=f"**{target_user.mention}** has **{balance:,}** {config.currency['name']}",
-        color=int(config.colors['primary'].replace('#', ''), 16)
+        title=f"💰 Wonder Balance",
+        description=f"**{target_user.display_name}** - *{role_status}*\n\n"
+                   f"**{config.currency['symbol']} {balance:,}** {config.currency['name']}",
+        color=int(role_color.replace('#', ''), 16)
     )
     embed.set_thumbnail(url=target_user.display_avatar.url)
-    embed.set_footer(text="Wonderkind • Where Wonder Meets Chrome Dreams")
+    embed.add_field(
+        name="🔮 Wonder Stats",
+        value=f"Total Earned: **{user_data.get('total_earned', 0):,}** {config.currency['symbol']}\n"
+              f"Member Since: {target_user.joined_at.strftime('%B %d, %Y') if target_user.joined_at else 'Unknown'}",
+        inline=False
+    )
+    embed.set_footer(text="Wonder Bot • Where Wonder Meets Chrome Dreams", 
+                    icon_url="https://cdn.discordapp.com/emojis/✨.png")
     
     await ctx.send(embed=embed)
 
@@ -248,32 +267,70 @@ async def daily(ctx: commands.Context):
             minutes, _ = divmod(remainder, 60)
             
             embed = discord.Embed(
-                title="🌙 Daily Reward Cooldown",
-                description=f"You can claim your daily reward in **{hours}h {minutes}m**",
+                title="🌙 Daily Wonder Cooldown",
+                description=f"✨ Your daily wonder energy is recharging...\n\n"
+                           f"⏰ Available in: **{hours}h {minutes}m**\n"
+                           f"💰 Next reward: **{config.currency['dailyAmount']:,}** {config.currency['symbol']}",
                 color=int(config.colors['warning'].replace('#', ''), 16)
             )
-            embed.set_footer(text="Wonderkind • Where Wonder Meets Chrome Dreams")
+            embed.set_author(name=f"{ctx.author.display_name}'s Daily Wonder", 
+                           icon_url=ctx.author.display_avatar.url)
+            embed.add_field(
+                name="💫 Tip",
+                value="Daily rewards reset every 24 hours and include bonus rewards for Boosters and Premium members!",
+                inline=False
+            )
+            embed.set_footer(text="Wonder Bot • Where Wonder Meets Chrome Dreams")
             await ctx.send(embed=embed)
             return
     
-    # Give daily reward
-    daily_amount = config.currency['dailyAmount']
+    # Calculate daily reward with bonuses
+    base_amount = config.currency['dailyAmount']
+    daily_amount = base_amount
+    bonus_text = ""
     
-    # Check for booster bonus
-    if ctx.author.premium_since:  # Boost bonus
-        daily_amount += config.booster['dailyBonus']
+    # Check for premium role bonus
+    if any(role.name.lower() in ['premium', 'vip'] for role in ctx.author.roles):
+        daily_amount = int(base_amount * config.multipliers['premium']['daily'])
+        bonus_text = "🌟 Premium bonus applied!"
+    elif ctx.author.premium_since:  # Boost bonus
+        daily_amount = int(base_amount * config.multipliers['booster']['daily'])
+        bonus_text = "💫 Server Booster bonus applied!"
     
     await ctx.bot.database.update_balance(str(ctx.author.id), daily_amount)
     await ctx.bot.database.update_daily_claim(str(ctx.author.id))
-    await ctx.bot.database.add_transaction(str(ctx.author.id), 'daily', daily_amount, 'Daily reward')
+    await ctx.bot.database.add_transaction(str(ctx.author.id), 'daily', daily_amount, f'Daily reward{" with bonus" if bonus_text else ""}')
+    
+    # Get updated balance for display
+    updated_user = await ctx.bot.database.get_user(str(ctx.author.id))
+    new_balance = updated_user['balance']
     
     embed = discord.Embed(
-        title=f"✨ Daily Wonder Reward",
-        description=f"You claimed **{daily_amount:,}** {config.currency['name']}!",
+        title=f"✨ Daily Wonder Claimed!",
+        description=f"🎉 **+{daily_amount:,}** {config.currency['symbol']} {config.currency['name']}\n\n"
+                   f"💰 **New Balance:** {new_balance:,} {config.currency['symbol']}\n"
+                   f"{bonus_text}",
         color=int(config.colors['success'].replace('#', ''), 16)
     )
-    embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.display_avatar.url)
-    embed.set_footer(text="Wonderkind • Where Wonder Meets Chrome Dreams")
+    embed.set_author(name=f"{ctx.author.display_name}'s Daily Wonder", 
+                    icon_url=ctx.author.display_avatar.url)
+    
+    if bonus_text:
+        bonus_amount = daily_amount - base_amount
+        embed.add_field(
+            name="🎁 Bonus Breakdown",
+            value=f"Base: **{base_amount:,}** {config.currency['symbol']}\n"
+                  f"Bonus: **+{bonus_amount:,}** {config.currency['symbol']}\n"
+                  f"Total: **{daily_amount:,}** {config.currency['symbol']}",
+            inline=True
+        )
+    
+    embed.add_field(
+        name="⏰ Next Claim",
+        value="Available in 24 hours",
+        inline=True
+    )
+    embed.set_footer(text="Wonder Bot • Where Wonder Meets Chrome Dreams")
     
     await ctx.send(embed=embed)
 
@@ -1417,101 +1474,119 @@ async def intro_delete(interaction: discord.Interaction):
 # Help Command (Hybrid)
 @commands.hybrid_command(name='help')
 async def help_command(ctx: commands.Context):
-    """Show wonderkind help information"""
+    """Show comprehensive wonderkind help information"""
     embed = discord.Embed(
         title=f"🌌 {config.branding['name']} - Wonder Help",
-        description=f"✨ {config.branding['tagline']} ✨",
+        description=f"✨ {config.branding['tagline']} ✨\n*Where Wonder Meets Chrome Dreams*",
         color=int(config.colors['primary'].replace('#', ''), 16)
     )
     
     embed.add_field(
         name="💰 Wonder Economy",
-        value="`/balance` or `w.balance` - Check balance\n"
-              "`/daily` or `w.daily` - Daily wonder reward\n"
-              "`/work` or `w.work` - Work in wonderkind\n"
-              "`/leaderboard` or `w.leaderboard` - Top dreamers",
+        value="**Balance & Rewards:**\n"
+              "`/balance` `w.balance` - Check WonderCoins\n"
+              "`/daily` `w.daily` - Daily reward (24h cooldown)\n"
+              "`/work` `w.work` - Work for coins (1h cooldown)\n"
+              "`/leaderboard` `w.leaderboard` - Top dreamers",
         inline=True
     )
     
     embed.add_field(
-        name="🎮 Wonder Games (Animated)",
-        value="`/coinflip` or `w.coinflip` - Animated flip\n"
-              "`/dice` or `w.dice` - Animated dice roll\n"
-              "`/slots` or `w.slots` - Animated slot machine\n"
-              "`w.gamestats` - Gambling stats",
+        name="🎮 Wonder Games",
+        value="**Animated Gaming:**\n"
+              "`/coinflip` `w.coinflip` - Coin flip betting\n"
+              "`/dice` `w.dice` - Dice roll betting\n"
+              "`/slots` `w.slots` - Slot machine\n"
+              "`w.gamestats` - View gambling stats",
         inline=True
     )
     
     embed.add_field(
-        name="🛒 Shop & Items",
-        value="`w.shop [category]` - View shop\n"
-              "`w.buy <item>` - Purchase item\n"
-              "`w.inventory` - View items\n"
-              "`w.use <item>` - Use item",
+        name="🏪 Shop & Inventory",
+        value="**Items & Trading:**\n"
+              "`w.shop [category]` - Browse shop\n"
+              "`w.buy <item> [quantity]` - Purchase items\n"
+              "`w.inventory` - View your items\n"
+              "`w.use <item>` - Use consumables",
         inline=True
     )
     
     embed.add_field(
-        name="📊 Leveling",
-        value="`w.rank [@user]` - View rank\n"
-              "Gain XP by chatting and being in voice!",
+        name="🎯 Leveling System",
+        value="**4-Category Progression:**\n"
+              "`w.rank [@user]` - View XP & levels\n"
+              "**Gain XP by:** Chatting (Text), Voice time,\n"
+              "Special activities (Role), Combined (Overall)",
         inline=True
     )
     
     embed.add_field(
-        name="👋 Introduction Cards",
-        value="`/intro-create` - Create your intro card\n"
-              "`/intro-view [@user]` - View intro cards\n"
-              "`/intro-edit` - Edit your card info\n"
-              "`/intro-privacy` - Toggle card privacy\n"
+        name="🎨 Introduction Cards",
+        value="**Personal Profiles:**\n"
+              "`/intro-create` - Create your card\n"
+              "`/intro-view [@user]` - View cards\n"
+              "`/intro-edit` - Edit your info\n"
+              "`/intro-privacy` - Toggle privacy\n"
               "`/intro-delete` - Delete your card",
         inline=True
     )
     
     embed.add_field(
-        name="🎨 Owner Commands",
-        value="`/intro-background` - 🔒 Set custom background\n"
-              "Upload image to customize card backgrounds",
+        name="🎉 Giveaway System",
+        value="**Community Events:**\n"
+              "`w.giveaway create` - Advanced giveaway\n"
+              "`w.quickgiveaway` - Quick setup\n"
+              "`w.giveaway list` - View active\n"
+              "`w.giveaway end/reroll` - Manage (Admin)",
         inline=True
     )
     
     embed.add_field(
-        name="🎉 Giveaway Commands",
-        value="`w.giveaway` - Advanced giveaway system\n"
-              "`w.giveaway create` - Create giveaway\n"
-              "`w.giveaway list` - List giveaways\n"
-              "`w.quickgiveaway` - Quick giveaway",
+        name="🪙 WonderCoins Drops",
+        value="**Automatic Drop System:**\n"
+              "• **Random drops** every 30min-3h\n"
+              "• **4 rarities:** Common, Rare, Epic, Legendary\n"
+              "• **3 collection types:** Standard, Quick, Lucky\n"
+              "• **Role bonuses:** Boosters +25%, Premium +50%",
         inline=True
     )
     
     embed.add_field(
-        name="🛡️ Admin Wonder Commands",
-        value="`w.giveaway end` - End giveaway\n"
-              "`w.giveaway reroll` - Reroll winners\n"
-              "`/adddrops` or `w.adddrops` - Add drop channel\n"
-              "`/removedrops` or `w.removedrops` - Remove channel\n"
-              "`w.dropchannels` - List drop channels\n"
-              "`w.configdrops` - Configure channel drops\n"
-              "`/forcedrop` or `w.forcedrop` - Force wonder drop",
+        name="🛡️ Admin Commands",
+        value="**Server Management:**\n"
+              "`/adddrops` `w.adddrops` - Add drop channel\n"
+              "`/removedrops` `w.removedrops` - Remove channel\n"
+              "`w.dropchannels` - List channels\n"
+              "`w.configdrops` - Configure settings\n"
+              "`/forcedrop` `w.forcedrop` - Force drop",
         inline=True
     )
     
     embed.add_field(
-        name="✨ WonderCoins Drops",
-        value="Mystical wonder drops appear randomly!\n"
-              "React quickly to collect them!\n"
-              "🌟 Enhanced with wonder energy! 🌟",
+        name="🔒 Owner Commands",
+        value="**Bot Owner Only:**\n"
+              "`/intro-background` - Custom card backgrounds\n"
+              "Upload images to customize server cards",
         inline=True
     )
     
     embed.add_field(
-        name="✨ Slash Commands Support",
-        value="🌟 All commands now support both slash commands (`/`) and prefix commands (`w.`)!\n"
-              "🔮 Slash commands provide better autocomplete and easier usage.",
+        name="✨ Command Support",
+        value="🌟 **Hybrid Commands:** Use either `/command` (slash) or `w.command` (prefix)\n"
+              "🔮 **Slash Benefits:** Autocomplete, parameter help, mobile-friendly\n"
+              "💫 **Prefix Benefits:** Quick typing, familiar Discord experience",
         inline=False
     )
     
-    embed.set_footer(text=f"Wonderkind v{config.branding['version']} • Where Wonder Meets Chrome Dreams")
+    embed.add_field(
+        name="🎁 Role Benefits",
+        value="**Server Boosters:** 1.5x XP, +50% daily/work, +25% drops\n"
+              "**Premium Members:** 1.75x XP, +100% daily/work, +50% drops\n"
+              "**Weighted Giveaways:** Premium 3x, Boosters 2x, Regular 1x odds",
+        inline=False
+    )
+    
+    embed.set_footer(text=f"Wonder Bot v{config.branding['version']} • Where Wonder Meets Chrome Dreams • Use /help for this menu")
     embed.timestamp = datetime.now()
     
     await ctx.send(embed=embed)
