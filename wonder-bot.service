@@ -1,0 +1,30 @@
+[Unit]
+Description=Wonder Discord Bot
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/wonder-discord-bot
+ExecStart=/usr/bin/python3 /opt/wonder-discord-bot/run.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=wonder-bot
+
+# Environment variables
+Environment=PYTHONPATH=/opt/wonder-discord-bot/src
+EnvironmentFile=-/opt/wonder-discord-bot/.env
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/wonder-discord-bot
+
+[Install]
+WantedBy=multi-user.target
