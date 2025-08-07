@@ -641,6 +641,9 @@ class Database:
     # Leveling system methods
     async def get_user_level(self, user_id: str) -> Optional[Dict[str, Any]]:
         """Get user level data"""
+        if self.use_mysql:
+            return await self.mysql_db.get_user_level(user_id)
+            
         async with aiosqlite.connect(self.db_path) as db:
             db.row_factory = aiosqlite.Row
             async with db.execute('SELECT * FROM user_levels WHERE user_id = ?', (user_id,)) as cursor:
@@ -649,6 +652,9 @@ class Database:
 
     async def update_user_xp(self, user_id: str, xp_gain: int) -> Tuple[int, bool]:
         """Update user XP and return new level and whether they leveled up"""
+        if self.use_mysql:
+            return await self.mysql_db.update_user_xp(user_id, xp_gain)
+            
         async with aiosqlite.connect(self.db_path) as db:
             # Get current data
             async with db.execute(
