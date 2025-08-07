@@ -81,6 +81,7 @@ class Database:
                     welcome_message TEXT,
                     intro_card_theme TEXT DEFAULT '#7C3AED',
                     intro_card_style TEXT DEFAULT 'gradient',
+                    intro_card_background_url TEXT,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
             """)
@@ -500,17 +501,19 @@ class Database:
                     # Update existing settings
                     await db.execute(
                         """UPDATE server_settings SET 
-                           intro_card_theme=?, intro_card_style=?
+                           intro_card_theme=?, intro_card_style=?, intro_card_background_url=?
                            WHERE guild_id=?""",
-                        (settings.get('intro_card_theme'), settings.get('intro_card_style'), settings['guild_id'])
+                        (settings.get('intro_card_theme'), settings.get('intro_card_style'), 
+                         settings.get('intro_card_background_url'), settings['guild_id'])
                     )
                 else:
                     # Insert new settings
                     await db.execute(
                         """INSERT INTO server_settings 
-                           (guild_id, intro_card_theme, intro_card_style) 
-                           VALUES (?, ?, ?)""",
-                        (settings['guild_id'], settings.get('intro_card_theme'), settings.get('intro_card_style'))
+                           (guild_id, intro_card_theme, intro_card_style, intro_card_background_url) 
+                           VALUES (?, ?, ?, ?)""",
+                        (settings['guild_id'], settings.get('intro_card_theme'), 
+                         settings.get('intro_card_style'), settings.get('intro_card_background_url'))
                     )
                 
                 await db.commit()

@@ -86,6 +86,7 @@ class WonderBot(commands.Bot):
         self.tree.add_command(intro_edit)
         self.tree.add_command(intro_view)
         self.tree.add_command(intro_privacy)
+        self.tree.add_command(intro_background)
         self.tree.add_command(intro_delete)
         
         # Sync slash commands
@@ -1180,6 +1181,179 @@ async def intro_privacy(interaction: discord.Interaction):
         logging.error(f"Error toggling intro card privacy: {e}")
         await interaction.response.send_message("❌ An error occurred while updating privacy settings.", ephemeral=True)
 
+@app_commands.command(name='intro-background', description='🔒 Bot Owner: Set custom background image for introduction cards')
+@app_commands.describe(image='Upload a background image (JPG/PNG)')
+async def intro_background(interaction: discord.Interaction, image: discord.Attachment = None):
+    """Bot owner only: Set custom background image for introduction cards"""
+    try:
+        # Check if user is bot owner
+        app_info = await interaction.client.application_info()
+        if interaction.user.id != app_info.owner.id:
+            embed = discord.Embed(
+                title="🔒 Owner Only Command",
+                description="This command can only be used by the bot owner.",
+                color=0xF59E0B
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+        
+        await interaction.response.defer(ephemeral=True)
+        
+        # Get current server settings
+        server_settings = await database.get_server_settings(str(interaction.guild.id))
+        if not server_settings:
+            server_settings = {
+                'guild_id': str(interaction.guild.id),
+                'intro_card_theme': '#7C3AED',
+                'intro_card_style': 'gradient'
+            }
+        
+        if image is None:
+            # Show current background and options to remove
+            class BackgroundManagementView(discord.ui.View):
+                def __init__(self, settings):
+                    super().__init__(timeout=300)
+                    self.settings = settings
+                
+                @discord.ui.button(label="🗑️ Remove Custom Background", style=discord.ButtonStyle.danger)
+                async def remove_background(self, interaction: discord.Interaction, button: discord.ui.Button):
+                    """Remove custom background"""
+                    self.settings['intro_card_background_url'] = None
+                    await database.save_server_settings(self.settings)
+                    
+                    embed = discord.Embed(
+                        title="✅ Background Removed",
+                        description="Custom background has been removed. Cards will now use the default gradient background.",
+                        color=0x10B981
+                    )
+                    await interaction.response.edit_message(embed=embed, view=None)
+            
+            current_bg = server_settings.get('intro_card_background_url')
+            embed = discord.Embed(
+                title="🖼️ Introduction Card Background Management",
+                description="Manage the background image for introduction cards in this server.",
+                color=0x7C3AED
+            )
+            
+            if current_bg:
+                embed.add_field(
+                    name="Current Background", 
+                    value="✅ Custom background image is set", 
+                    inline=False
+                )
+                embed.set_image(url=current_bg)
+                view = BackgroundManagementView(server_settings)
+            else:
+                embed.add_field(
+                    name="Current Background", 
+                    value="🌈 Default gradient background", 
+                    inline=False
+                )
+                view = None
+            
+            embed.add_field(
+                name="How to Set Background",
+                value="Use `/intro-background` with an image attachment to set a custom background.\n"
+                      "Supported formats: JPG, PNG\n"
+                      "Recommended size: 800x600 pixels",
+                inline=False
+            )
+            
+            await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+            return
+        
+        # Validate image
+        if not image.content_type or not image.content_type.startswith('image/'):
+            embed = discord.Embed(
+                title="❌ Invalid File Type",
+                description="Please upload a valid image file (JPG or PNG).",
+                color=0xF59E0B
+            )
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            return
+        
+        # Check file size (max 8MB)
+        if image.size > 8 * 1024 * 1024:
+            embed = discord.Embed(
+                title="❌ File Too Large",
+                description="Image must be smaller than 8MB.",
+                color=0xF59E0B
+            )
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            return
+        
+        # Save the image URL to server settings
+        server_settings['intro_card_background_url'] = image.url
+        success = await database.save_server_settings(server_settings)
+        
+        if success:
+            embed = discord.Embed(
+                title="✅ Background Updated Successfully",
+                description="The custom background image has been set for introduction cards.",
+                color=0x10B981
+            )
+            embed.add_field(
+                name="New Background Preview",
+                value="All new and updated introduction cards will use this background.",
+                inline=False
+            )
+            embed.set_image(url=image.url)
+            
+            # Add button to test the background
+            class TestView(discord.ui.View):
+                def __init__(self):
+                    super().__init__(timeout=300)
+                
+                @discord.ui.button(label="🎨 Preview on Sample Card", style=discord.ButtonStyle.primary)
+                async def preview_background(self, interaction: discord.Interaction, button: discord.ui.Button):
+                    """Generate a sample card with the new background"""
+                    await interaction.response.defer(ephemeral=True)
+                    
+                    try:
+                        # Create sample card data
+                        sample_data = {
+                            'name': 'Sample User',
+                            'age': 25,
+                            'location': 'Wonderland',
+                            'bio': 'This is a sample introduction card to preview the new background!',
+                            'hobbies': 'Testing, Previewing, and Being Awesome',
+                            'favorite_color': '#7C3AED',
+                            'background_style': 'gradient'
+                        }
+                        
+                        # Generate preview card
+                        card_image = await interaction.client.intro_card_system.generate_card_image(
+                            interaction.user, sample_data
+                        )
+                        
+                        file = discord.File(io.BytesIO(card_image), filename="background_preview.png")
+                        embed = discord.Embed(
+                            title="🎨 Background Preview",
+                            description="Here's how the new background looks on an introduction card:",
+                            color=0x7C3AED
+                        )
+                        embed.set_image(url="attachment://background_preview.png")
+                        
+                        await interaction.followup.send(embed=embed, file=file, ephemeral=True)
+                        
+                    except Exception as e:
+                        logging.error(f"Error generating background preview: {e}")
+                        await interaction.followup.send("❌ Error generating preview. The background is still saved successfully.", ephemeral=True)
+            
+            view = TestView()
+            await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+        else:
+            embed = discord.Embed(
+                title="❌ Error",
+                description="There was an error saving the background image. Please try again.",
+                color=0xEF4444
+            )
+            await interaction.followup.send(embed=embed, ephemeral=True)
+        
+    except Exception as e:
+        logging.error(f"Error setting intro background: {e}")
+        await interaction.followup.send("❌ An error occurred while setting the background.", ephemeral=True)
+
 @app_commands.command(name='intro-delete', description='Delete your introduction card')
 async def intro_delete(interaction: discord.Interaction):
     """Delete introduction card"""
@@ -1291,6 +1465,13 @@ async def help_command(ctx: commands.Context):
               "`/intro-edit` - Edit your card info\n"
               "`/intro-privacy` - Toggle card privacy\n"
               "`/intro-delete` - Delete your card",
+        inline=True
+    )
+    
+    embed.add_field(
+        name="🎨 Owner Commands",
+        value="`/intro-background` - 🔒 Set custom background\n"
+              "Upload image to customize card backgrounds",
         inline=True
     )
     

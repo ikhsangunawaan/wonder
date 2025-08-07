@@ -39,17 +39,41 @@ class CanvasUtils:
     async def create_introduction_card(self, user, card_data: Dict[str, Any]) -> bytes:
         """Create an introduction card image"""
         try:
+            from database import database
+            
             # Create base image
             img = Image.new('RGB', (self.width, self.height), color='white')
             draw = ImageDraw.Draw(img)
             
-            # Create gradient background (fixed theme)
-            background = self._create_gradient_background('#7C3AED')  # Fixed purple theme
-            img.paste(background, (0, 0))
+            # Check if custom background is set
+            guild_id = card_data.get('guild_id')
+            custom_bg_url = None
             
-            # Add subtle pattern overlay
-            pattern_overlay = self._create_pattern_overlay()
-            img.paste(pattern_overlay, (0, 0), pattern_overlay)
+            if guild_id:
+                server_settings = await database.get_server_settings(guild_id)
+                if server_settings:
+                    custom_bg_url = server_settings.get('intro_card_background_url')
+            
+            # Use custom background if available, otherwise use gradient
+            if custom_bg_url:
+                try:
+                    background = await self._create_custom_background(custom_bg_url)
+                    img.paste(background, (0, 0))
+                except Exception as e:
+                    logging.warning(f"Failed to load custom background, using default: {e}")
+                    # Fallback to gradient
+                    background = self._create_gradient_background('#7C3AED')
+                    img.paste(background, (0, 0))
+                    # Add pattern overlay for gradient
+                    pattern_overlay = self._create_pattern_overlay()
+                    img.paste(pattern_overlay, (0, 0), pattern_overlay)
+            else:
+                # Create gradient background (default)
+                background = self._create_gradient_background('#7C3AED')
+                img.paste(background, (0, 0))
+                # Add pattern overlay for gradient
+                pattern_overlay = self._create_pattern_overlay()
+                img.paste(pattern_overlay, (0, 0), pattern_overlay)
             
             # Main content background
             content_x, content_y = 50, 50
@@ -237,6 +261,73 @@ class CanvasUtils:
                     )
         
         return pattern
+    
+    async def _create_custom_background(self, image_url: str) -> Image.Image:
+        """Create background from custom image URL"""
+        try:
+            # Download image
+            async with aiohttp.ClientSession() as session:
+                async with session.get(image_url) as response:
+                    if response.status == 200:
+                        image_data = await response.read()
+                        
+                        # Open and process image
+                        bg_image = Image.open(io.BytesIO(image_data)).convert('RGBA')
+                        
+                        # Resize to fit card dimensions while maintaining aspect ratio
+                        bg_image = self._resize_background_image(bg_image)
+                        
+                        # Create final background
+                        background = Image.new('RGB', (self.width, self.height), color='white')
+                        
+                        # Center the background image
+                        bg_width, bg_height = bg_image.size
+                        x = (self.width - bg_width) // 2
+                        y = (self.height - bg_height) // 2
+                        
+                        # Paste background image
+                        if bg_image.mode == 'RGBA':
+                            background.paste(bg_image, (x, y), bg_image)
+                        else:
+                            background.paste(bg_image, (x, y))
+                        
+                        # Add slight overlay to ensure text readability
+                        overlay = Image.new('RGBA', (self.width, self.height), (0, 0, 0, 30))
+                        background.paste(overlay, (0, 0), overlay)
+                        
+                        return background
+                    else:
+                        raise Exception(f"HTTP {response.status}")
+        except Exception as e:
+            logging.error(f"Error loading custom background: {e}")
+            raise
+    
+    def _resize_background_image(self, image: Image.Image) -> Image.Image:
+        """Resize background image to fit card dimensions"""
+        original_width, original_height = image.size
+        target_width, target_height = self.width, self.height
+        
+        # Calculate scaling factor to cover the entire card
+        scale_x = target_width / original_width
+        scale_y = target_height / original_height
+        scale = max(scale_x, scale_y)  # Use max to ensure full coverage
+        
+        # Calculate new dimensions
+        new_width = int(original_width * scale)
+        new_height = int(original_height * scale)
+        
+        # Resize image
+        resized_image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        
+        # If image is larger than target, crop from center
+        if new_width > target_width or new_height > target_height:
+            left = (new_width - target_width) // 2
+            top = (new_height - target_height) // 2
+            right = left + target_width
+            bottom = top + target_height
+            resized_image = resized_image.crop((left, top, right, bottom))
+        
+        return resized_image
     
     def _create_pattern_overlay(self) -> Image.Image:
         """Create a subtle pattern overlay"""

@@ -271,8 +271,9 @@ class IntroCardSystem:
     async def generate_card_image(self, user: discord.Member, card_data: Dict[str, Any]) -> bytes:
         """Generate the visual card image"""
         try:
-            # Record view
-            await database.add_card_interaction(card_data['id'], str(user.id), 'view')
+            # Record view only if it's a real card (has ID)
+            if card_data.get('id'):
+                await database.add_card_interaction(card_data['id'], str(user.id), 'view')
             
             # Generate image
             return await canvas_utils.create_introduction_card(user, card_data)
