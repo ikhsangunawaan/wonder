@@ -21,7 +21,7 @@ from games_system import games_system
 from wondercoins_drops import init_wondercoins_drops
 from leveling_system import init_leveling_system
 from cooldown_manager import cooldown_manager
-from intro_card_system import init_intro_card_system, IntroCardModal, IntroCardAdvancedModal, IntroCardView
+from intro_card_system import init_intro_card_system, IntroCardModal, IntroCardView
 from datetime import datetime
 
 # Configure logging
@@ -85,9 +85,6 @@ class WonderBot(commands.Bot):
         self.tree.add_command(intro_create)
         self.tree.add_command(intro_edit)
         self.tree.add_command(intro_view)
-        self.tree.add_command(intro_themes)
-        self.tree.add_command(intro_gallery)
-        self.tree.add_command(intro_extend)
         self.tree.add_command(intro_privacy)
         self.tree.add_command(intro_delete)
         
@@ -1136,235 +1133,9 @@ async def intro_view(interaction: discord.Interaction, user: discord.Member = No
         logging.error(f"Error viewing intro card: {e}")
         await interaction.response.send_message("❌ An error occurred while viewing the card.", ephemeral=True)
 
-@app_commands.command(name='intro-themes', description='🔒 Bot Owner: Manage server introduction card themes')
-async def intro_themes(interaction: discord.Interaction):
-    """Bot owner only: Manage introduction card themes"""
-    try:
-        # Check if user is bot owner
-        app_info = await interaction.client.application_info()
-        if interaction.user.id != app_info.owner.id:
-            embed = discord.Embed(
-                title="🔒 Owner Only Command",
-                description="This command can only be used by the bot owner.",
-                color=0xF59E0B
-            )
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-            return
-        
-        # Get server settings or create default
-        server_settings = await database.get_server_settings(str(interaction.guild.id))
-        if not server_settings:
-            server_settings = {
-                'guild_id': str(interaction.guild.id),
-                'intro_card_theme': '#7C3AED',
-                'intro_card_style': 'gradient'
-            }
-            await database.save_server_settings(server_settings)
-        
-        # Show theme management view
-        class ThemeManagementView(discord.ui.View):
-            def __init__(self, settings):
-                super().__init__(timeout=300)
-                self.settings = settings
-            
-            @discord.ui.select(
-                placeholder="Choose server default color theme...",
-                options=[
-                    discord.SelectOption(label="Purple", description="Classic purple theme", emoji="🟣", value="#7C3AED"),
-                    discord.SelectOption(label="Blue", description="Cool blue theme", emoji="🔵", value="#3B82F6"),
-                    discord.SelectOption(label="Green", description="Fresh green theme", emoji="🟢", value="#10B981"),
-                    discord.SelectOption(label="Pink", description="Sweet pink theme", emoji="🩷", value="#EC4899"),
-                    discord.SelectOption(label="Orange", description="Warm orange theme", emoji="🟠", value="#F97316"),
-                    discord.SelectOption(label="Red", description="Bold red theme", emoji="🔴", value="#EF4444"),
-                ]
-            )
-            async def color_select(self, interaction: discord.Interaction, select: discord.ui.Select):
-                """Handle color selection"""
-                self.settings['intro_card_theme'] = select.values[0]
-                await database.save_server_settings(self.settings)
-                
-                color_name = next(opt.label for opt in select.options if opt.value == select.values[0])
-                await interaction.response.send_message(f"✅ Server default color theme changed to {color_name}!", ephemeral=True)
-            
-            @discord.ui.select(
-                placeholder="Choose server default background style...",
-                options=[
-                    discord.SelectOption(label="Gradient", description="Smooth color gradient", emoji="🌈", value="gradient"),
-                    discord.SelectOption(label="Solid", description="Solid color background", emoji="⬜", value="solid"),
-                    discord.SelectOption(label="Pattern", description="Geometric patterns", emoji="🔶", value="pattern"),
-                ]
-            )
-            async def style_select(self, interaction: discord.Interaction, select: discord.ui.Select):
-                """Handle background style selection"""
-                self.settings['intro_card_style'] = select.values[0]
-                await database.save_server_settings(self.settings)
-                
-                style_name = next(opt.label for opt in select.options if opt.value == select.values[0])
-                await interaction.response.send_message(f"✅ Server default background style changed to {style_name}!", ephemeral=True)
-            
-            @discord.ui.button(label="🔄 Apply to All Existing Cards", style=discord.ButtonStyle.primary)
-            async def apply_to_all(self, interaction: discord.Interaction, button: discord.ui.Button):
-                """Apply current settings to all existing cards"""
-                await interaction.response.defer(ephemeral=True)
-                
-                try:
-                    # Get all cards in this server
-                    all_cards = await database.get_intro_cards_by_guild(str(interaction.guild.id), limit=1000)
-                    
-                    updated_count = 0
-                    for card in all_cards:
-                        card['favorite_color'] = self.settings['intro_card_theme']
-                        card['background_style'] = self.settings['intro_card_style']
-                        await database.save_intro_card(card)
-                        updated_count += 1
-                    
-                    embed = discord.Embed(
-                        title="✅ Theme Applied Successfully",
-                        description=f"Updated {updated_count} introduction cards with the new theme.",
-                        color=0x10B981
-                    )
-                    await interaction.followup.send(embed=embed, ephemeral=True)
-                    
-                except Exception as e:
-                    logging.error(f"Error applying theme to all cards: {e}")
-                    await interaction.followup.send("❌ An error occurred while applying the theme.", ephemeral=True)
-        
-        view = ThemeManagementView(server_settings)
-        embed = discord.Embed(
-            title="🎨 Server Theme Management",
-            description="Configure the default theme for all introduction cards in this server.",
-            color=int(server_settings.get('intro_card_theme', '#7C3AED').replace('#', ''), 16)
-        )
-        embed.add_field(
-            name="Current Server Defaults", 
-            value=f"Color: {server_settings.get('intro_card_theme', '#7C3AED')}\nStyle: {server_settings.get('intro_card_style', 'gradient').title()}", 
-            inline=False
-        )
-        embed.add_field(
-            name="How This Works",
-            value="• New cards will use these default settings\n• You can apply settings to existing cards\n• Only bot owner can change themes",
-            inline=False
-        )
-        
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-        
-    except Exception as e:
-        logging.error(f"Error managing intro themes: {e}")
-        await interaction.response.send_message("❌ An error occurred while opening theme management.", ephemeral=True)
 
-@app_commands.command(name='intro-gallery', description='View all introduction cards in this server')
-@app_commands.describe(page='Page number to view (default: 1)')
-async def intro_gallery(interaction: discord.Interaction, page: int = 1):
-    """View introduction card gallery"""
-    try:
-        if page < 1:
-            page = 1
-        
-        # Get cards for this guild
-        cards_per_page = 10
-        offset = (page - 1) * cards_per_page
-        
-        all_cards = await database.get_intro_cards_by_guild(str(interaction.guild.id), limit=100)
-        total_cards = len(all_cards)
-        
-        if not all_cards:
-            embed = discord.Embed(
-                title="📖 Introduction Gallery",
-                description="No introduction cards have been created in this server yet!\nUse `/intro-create` to be the first!",
-                color=0x7C3AED
-            )
-            await interaction.response.send_message(embed=embed)
-            return
-        
-        # Paginate cards
-        start_idx = offset
-        end_idx = min(start_idx + cards_per_page, total_cards)
-        page_cards = all_cards[start_idx:end_idx]
-        
-        embed = discord.Embed(
-            title="📖 Introduction Gallery",
-            description=f"Meet the wonderful members of {interaction.guild.name}!",
-            color=0x7C3AED
-        )
-        
-        for card in page_cards:
-            user = interaction.guild.get_member(int(card['user_id']))
-            if user:
-                # Create a short preview
-                bio_preview = card.get('bio', '')[:100]
-                if len(card.get('bio', '')) > 100:
-                    bio_preview += "..."
-                
-                info_parts = []
-                if card.get('age'):
-                    info_parts.append(f"Age: {card['age']}")
-                if card.get('location'):
-                    info_parts.append(f"Location: {card['location']}")
-                
-                field_value = f"*{bio_preview}*\n"
-                if info_parts:
-                    field_value += " • ".join(info_parts) + "\n"
-                field_value += f"❤️ {card.get('likes_count', 0)} likes • 👀 {card.get('views_count', 0)} views"
-                
-                embed.add_field(
-                    name=f"👋 {card.get('name', 'Unknown')} (@{user.display_name})",
-                    value=field_value,
-                    inline=False
-                )
-        
-        # Add pagination info
-        total_pages = (total_cards + cards_per_page - 1) // cards_per_page
-        embed.set_footer(text=f"Page {page}/{total_pages} • {total_cards} total cards")
-        
-        # Add navigation buttons if needed
-        if total_pages > 1:
-            view = discord.ui.View()
-            
-            if page > 1:
-                prev_button = discord.ui.Button(label="◀️ Previous", style=discord.ButtonStyle.secondary)
-                async def prev_callback(interaction):
-                    await intro_gallery.callback(interaction, page - 1)
-                prev_button.callback = prev_callback
-                view.add_item(prev_button)
-            
-            if page < total_pages:
-                next_button = discord.ui.Button(label="Next ▶️", style=discord.ButtonStyle.secondary)
-                async def next_callback(interaction):
-                    await intro_gallery.callback(interaction, page + 1)
-                next_button.callback = next_callback
-                view.add_item(next_button)
-            
-            await interaction.response.send_message(embed=embed, view=view)
-        else:
-            await interaction.response.send_message(embed=embed)
-        
-    except Exception as e:
-        logging.error(f"Error viewing intro gallery: {e}")
-        await interaction.response.send_message("❌ An error occurred while loading the gallery.", ephemeral=True)
 
-@app_commands.command(name='intro-extend', description='Add extended information to your introduction card')
-async def intro_extend(interaction: discord.Interaction):
-    """Add extended information to introduction card"""
-    try:
-        # Get existing card
-        existing_card = await database.get_intro_card(str(interaction.user.id))
-        
-        if not existing_card:
-            embed = discord.Embed(
-                title="❌ No Card Found",
-                description="You don't have an introduction card yet! Use `/intro-create` to make one.",
-                color=0xF59E0B
-            )
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-            return
-        
-        # Show advanced modal
-        modal = IntroCardAdvancedModal(existing_card)
-        await interaction.response.send_modal(modal)
-        
-    except Exception as e:
-        logging.error(f"Error extending intro card: {e}")
-        await interaction.response.send_message("❌ An error occurred while opening extended information form.", ephemeral=True)
+
 
 @app_commands.command(name='intro-privacy', description='Toggle your introduction card privacy')
 async def intro_privacy(interaction: discord.Interaction):
@@ -1517,18 +1288,9 @@ async def help_command(ctx: commands.Context):
         name="👋 Introduction Cards",
         value="`/intro-create` - Create your intro card\n"
               "`/intro-view [@user]` - View intro cards\n"
-              "`/intro-edit` - Edit basic info\n"
-              "`/intro-extend` - Add extended info\n"
-              "`/intro-gallery` - Browse all cards\n"
+              "`/intro-edit` - Edit your card info\n"
               "`/intro-privacy` - Toggle card privacy\n"
               "`/intro-delete` - Delete your card",
-        inline=True
-    )
-    
-    embed.add_field(
-        name="🎨 Owner Commands",
-        value="`/intro-themes` - 🔒 Manage server themes\n"
-              "Only bot owner can customize card themes",
         inline=True
     )
     

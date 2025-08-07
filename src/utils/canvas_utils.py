@@ -37,30 +37,19 @@ class CanvasUtils:
         return fonts
     
     async def create_introduction_card(self, user, card_data: Dict[str, Any]) -> bytes:
-        """Create an advanced introduction card image"""
+        """Create an introduction card image"""
         try:
-            # Get template and style settings
-            template = card_data.get('card_template', 'default')
-            background_style = card_data.get('background_style', 'gradient')
-            
             # Create base image
             img = Image.new('RGB', (self.width, self.height), color='white')
             draw = ImageDraw.Draw(img)
             
-            # Create background based on style
-            if background_style == 'solid':
-                background = self._create_solid_background(card_data.get('favorite_color', '#7C3AED'))
-            elif background_style == 'pattern':
-                background = self._create_pattern_background(card_data.get('favorite_color', '#7C3AED'))
-            else:  # gradient (default)
-                background = self._create_gradient_background(card_data.get('favorite_color', '#7C3AED'))
-            
+            # Create gradient background (fixed theme)
+            background = self._create_gradient_background('#7C3AED')  # Fixed purple theme
             img.paste(background, (0, 0))
             
-            # Add subtle pattern overlay for non-pattern backgrounds
-            if background_style != 'pattern':
-                pattern_overlay = self._create_pattern_overlay()
-                img.paste(pattern_overlay, (0, 0), pattern_overlay)
+            # Add subtle pattern overlay
+            pattern_overlay = self._create_pattern_overlay()
+            img.paste(pattern_overlay, (0, 0), pattern_overlay)
             
             # Main content background
             content_x, content_y = 50, 50
@@ -115,11 +104,9 @@ class CanvasUtils:
             text_start_y = avatar_y + 20
             current_y = text_start_y
             
-            # Name and Pronouns
+            # Name
             name_font = self.fonts.get('large', ImageFont.load_default())
             name_text = card_data.get('name', 'Unknown')
-            if card_data.get('pronouns'):
-                name_text += f" ({card_data['pronouns']})"
             draw.text((text_x, current_y), name_text, fill='#1F2937', font=name_font)
             current_y += 40
             
@@ -130,17 +117,10 @@ class CanvasUtils:
                 info_parts.append(f"{card_data['age']} years old")
             if card_data.get('location'):
                 info_parts.append(card_data['location'])
-            if card_data.get('timezone'):
-                info_parts.append(f"TZ: {card_data['timezone']}")
             
             if info_parts:
                 age_location = " • ".join(info_parts)
                 draw.text((text_x, current_y), age_location, fill='#6B7280', font=info_font)
-                current_y += 25
-            
-            # Occupation
-            if card_data.get('occupation'):
-                draw.text((text_x, current_y), f"💼 {card_data['occupation']}", fill='#4B5563', font=info_font)
                 current_y += 25
             
             # Bio section
@@ -167,30 +147,8 @@ class CanvasUtils:
                     draw.text((content_x + 40, current_y), line, fill='#374151', font=bio_font)
                     current_y += 25
             
-            # Fun fact section
-            if card_data.get('fun_fact'):
-                current_y += 15
-                draw.text((content_x + 40, current_y), '🎉 Fun Fact:', fill='#1F2937', font=section_font)
-                current_y += 30
-                
-                fact_lines = self._wrap_text(draw, card_data['fun_fact'], content_width - 80, bio_font)
-                for line in fact_lines:
-                    draw.text((content_x + 40, current_y), line, fill='#374151', font=bio_font)
-                    current_y += 22
-            
-            # Social media section
-            if card_data.get('social_media'):
-                current_y += 15
-                draw.text((content_x + 40, current_y), '🌐 Connect with me:', fill='#1F2937', font=section_font)
-                current_y += 30
-                
-                social_lines = self._wrap_text(draw, card_data['social_media'], content_width - 80, bio_font)
-                for line in social_lines:
-                    draw.text((content_x + 40, current_y), line, fill='#374151', font=bio_font)
-                    current_y += 22
-            
             # Add decorative elements
-            self._add_decorations(draw, card_data.get('favorite_color', '#7C3AED'))
+            self._add_decorations(draw, '#7C3AED')
             
             # Wonder bot branding
             brand_font = self.fonts.get('regular', ImageFont.load_default())

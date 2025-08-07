@@ -186,12 +186,7 @@ class IntroCardModal(discord.ui.Modal):
                     await interaction.followup.send("❌ Please enter a valid number for age.", ephemeral=True)
                     return
             
-            # Get server theme settings
-            server_settings = await database.get_server_settings(str(interaction.guild.id))
-            default_color = server_settings.get('intro_card_theme', '#7C3AED') if server_settings else '#7C3AED'
-            default_style = server_settings.get('intro_card_style', 'gradient') if server_settings else 'gradient'
-            
-            # Create card data
+            # Create card data with fixed theme
             card_data = {
                 'user_id': str(interaction.user.id),
                 'guild_id': str(interaction.guild.id),
@@ -200,8 +195,8 @@ class IntroCardModal(discord.ui.Modal):
                 'location': self.location_input.value.strip() or None,
                 'bio': self.bio_input.value.strip(),
                 'hobbies': self.hobbies_input.value.strip() or None,
-                'favorite_color': default_color,
-                'background_style': default_style,
+                'favorite_color': '#7C3AED',  # Fixed purple theme
+                'background_style': 'gradient',  # Fixed gradient style
             }
             
             # Save to database
@@ -213,20 +208,8 @@ class IntroCardModal(discord.ui.Modal):
                     description="Your introduction card has been created successfully!",
                     color=0x10B981
                 )
-                # Create a view with button to add extended info
-                class ExtendedInfoView(discord.ui.View):
-                    def __init__(self, card_data):
-                        super().__init__(timeout=300)
-                        self.card_data = card_data
-                    
-                    @discord.ui.button(label="➕ Add Extended Info", style=discord.ButtonStyle.primary, emoji="✨")
-                    async def add_extended_info(self, interaction: discord.Interaction, button: discord.ui.Button):
-                        modal = IntroCardAdvancedModal(self.card_data)
-                        await interaction.response.send_modal(modal)
-                
-                view = ExtendedInfoView(card_data)
-                embed.add_field(name="Next Steps", value="Use `/intro-view` to see your card\nClick the button below to add more information!\nNote: Card themes are managed by the bot owner.", inline=False)
-                await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+                embed.add_field(name="Next Steps", value="Use `/intro-view` to see your card\nUse `/intro-edit` to modify your information", inline=False)
+                await interaction.followup.send(embed=embed, ephemeral=True)
             else:
                 await interaction.followup.send("❌ There was an error saving your card. Please try again.", ephemeral=True)
                 
@@ -235,106 +218,7 @@ class IntroCardModal(discord.ui.Modal):
             await interaction.followup.send("❌ An error occurred while saving your card.", ephemeral=True)
 
 
-class IntroCardAdvancedModal(discord.ui.Modal):
-    """Modal for additional introduction card fields"""
-    
-    def __init__(self, existing_card: Optional[Dict[str, Any]] = None):
-        super().__init__(title="✨ Extended Profile Information")
-        self.existing_card = existing_card
-        
-        # Pronouns field
-        self.pronouns_input = discord.ui.TextInput(
-            label="Pronouns (optional)",
-            placeholder="e.g., they/them, she/her, he/him",
-            default=existing_card.get('pronouns', '') if existing_card else '',
-            max_length=30,
-            required=False
-        )
-        self.add_item(self.pronouns_input)
-        
-        # Occupation field
-        self.occupation_input = discord.ui.TextInput(
-            label="Occupation/Role (optional)",
-            placeholder="What do you do for work or study?",
-            default=existing_card.get('occupation', '') if existing_card else '',
-            max_length=100,
-            required=False
-        )
-        self.add_item(self.occupation_input)
-        
-        # Timezone field
-        self.timezone_input = discord.ui.TextInput(
-            label="Timezone (optional)",
-            placeholder="e.g., EST, UTC+3, PST",
-            default=existing_card.get('timezone', '') if existing_card else '',
-            max_length=20,
-            required=False
-        )
-        self.add_item(self.timezone_input)
-        
-        # Social media field
-        self.social_input = discord.ui.TextInput(
-            label="Social Media/Contact (optional)",
-            style=discord.TextStyle.paragraph,
-            placeholder="Share your social media handles or ways to connect",
-            default=existing_card.get('social_media', '') if existing_card else '',
-            max_length=200,
-            required=False
-        )
-        self.add_item(self.social_input)
-        
-        # Fun fact field
-        self.fun_fact_input = discord.ui.TextInput(
-            label="Fun Fact (optional)",
-            style=discord.TextStyle.paragraph,
-            placeholder="Share something interesting or unique about yourself!",
-            default=existing_card.get('fun_fact', '') if existing_card else '',
-            max_length=200,
-            required=False
-        )
-        self.add_item(self.fun_fact_input)
-    
-    async def on_submit(self, interaction: discord.Interaction):
-        """Handle modal submission"""
-        try:
-            await interaction.response.defer(ephemeral=True)
-            
-            # Get existing card data or create new
-            if self.existing_card:
-                card_data = self.existing_card.copy()
-            else:
-                # This should not happen, but handle gracefully
-                card_data = {
-                    'user_id': str(interaction.user.id),
-                    'guild_id': str(interaction.guild.id),
-                }
-            
-            # Update with new information
-            card_data.update({
-                'pronouns': self.pronouns_input.value.strip() or None,
-                'occupation': self.occupation_input.value.strip() or None,
-                'timezone': self.timezone_input.value.strip() or None,
-                'social_media': self.social_input.value.strip() or None,
-                'fun_fact': self.fun_fact_input.value.strip() or None,
-            })
-            
-            # Save to database
-            card_id = await database.save_intro_card(card_data)
-            
-            if card_id:
-                embed = discord.Embed(
-                    title="✅ Extended Information Saved!",
-                    description="Your additional profile information has been updated successfully!",
-                    color=0x10B981
-                )
-                embed.add_field(name="Next Steps", value="Use `/intro-view` to see your updated card\nCard themes are managed by the bot owner", inline=False)
-                await interaction.followup.send(embed=embed, ephemeral=True)
-            else:
-                await interaction.followup.send("❌ There was an error saving your extended information.", ephemeral=True)
-                
-        except Exception as e:
-            logging.error(f"Error handling advanced intro card modal: {e}")
-            await interaction.followup.send("❌ An error occurred while saving your extended information.", ephemeral=True)
+
 
 
 
@@ -359,8 +243,6 @@ class IntroCardSystem:
             info_parts.append(f"🎂 {card_data['age']} years old")
         if card_data.get('location'):
             info_parts.append(f"📍 {card_data['location']}")
-        if card_data.get('pronouns'):
-            info_parts.append(f"✨ {card_data['pronouns']}")
         
         if info_parts:
             embed.add_field(name="Basic Info", value="\n".join(info_parts), inline=True)
@@ -372,22 +254,6 @@ class IntroCardSystem:
         # Hobbies
         if card_data.get('hobbies'):
             embed.add_field(name="Hobbies & Interests", value=card_data['hobbies'], inline=False)
-        
-        # Additional info
-        extra_info = []
-        if card_data.get('occupation'):
-            extra_info.append(f"💼 {card_data['occupation']}")
-        if card_data.get('timezone'):
-            extra_info.append(f"🕐 {card_data['timezone']}")
-        if card_data.get('social_media'):
-            extra_info.append(f"🌐 {card_data['social_media']}")
-        
-        if extra_info:
-            embed.add_field(name="More Info", value="\n".join(extra_info), inline=True)
-        
-        # Fun fact
-        if card_data.get('fun_fact'):
-            embed.add_field(name="🎉 Fun Fact", value=card_data['fun_fact'], inline=False)
         
         # Stats
         stats = f"❤️ {card_data.get('likes_count', 0)} likes • 👀 {card_data.get('views_count', 0)} views"
