@@ -302,11 +302,12 @@ class MySQLDatabase:
         async with await self._get_connection() as db:
             cursor = await db.cursor()
             await cursor.execute(
-                "INSERT INTO users (user_id, username) VALUES (%s, %s)",
+                "INSERT IGNORE INTO users (user_id, username) VALUES (%s, %s)",
                 (user_id, username)
             )
+            rowcount = cursor.rowcount
             await cursor.close()
-            return cursor.rowcount
+            return rowcount
     
     async def update_balance(self, user_id: str, amount: int) -> int:
         """Update user balance"""
@@ -316,8 +317,9 @@ class MySQLDatabase:
                 "UPDATE users SET balance = balance + %s, total_earned = total_earned + %s WHERE user_id = %s",
                 (amount, max(0, amount), user_id)
             )
+            rowcount = cursor.rowcount
             await cursor.close()
-            return cursor.rowcount
+            return rowcount
     
     async def set_balance(self, user_id: str, amount: int) -> int:
         """Set user balance"""
@@ -327,8 +329,9 @@ class MySQLDatabase:
                 "UPDATE users SET balance = %s WHERE user_id = %s",
                 (amount, user_id)
             )
+            rowcount = cursor.rowcount
             await cursor.close()
-            return cursor.rowcount
+            return rowcount
     
     async def update_daily_claim(self, user_id: str) -> int:
         """Update daily claim timestamp"""

@@ -350,6 +350,9 @@ class Database:
 
     async def update_balance(self, user_id: str, amount: int) -> int:
         """Update user balance by adding the specified amount"""
+        if self.use_mysql:
+            return await self.mysql_db.update_balance(user_id, amount)
+            
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
                 'UPDATE users SET balance = balance + ?, total_earned = total_earned + ? WHERE user_id = ?',
