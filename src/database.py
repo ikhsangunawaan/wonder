@@ -79,6 +79,8 @@ class Database:
                     welcome_channel TEXT,
                     introduction_channel TEXT,
                     welcome_message TEXT,
+                    intro_card_theme TEXT DEFAULT '#7C3AED',
+                    intro_card_style TEXT DEFAULT 'gradient',
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
             """)
@@ -486,6 +488,36 @@ class Database:
             async with db.execute('SELECT * FROM server_settings WHERE guild_id = ?', (guild_id,)) as cursor:
                 row = await cursor.fetchone()
                 return dict(row) if row else None
+    
+    async def save_server_settings(self, settings: Dict[str, Any]) -> bool:
+        """Save server settings"""
+        async with aiosqlite.connect(self.db_path) as db:
+            try:
+                # Check if settings exist
+                existing = await self.get_server_settings(settings['guild_id'])
+                
+                if existing:
+                    # Update existing settings
+                    await db.execute(
+                        """UPDATE server_settings SET 
+                           intro_card_theme=?, intro_card_style=?
+                           WHERE guild_id=?""",
+                        (settings.get('intro_card_theme'), settings.get('intro_card_style'), settings['guild_id'])
+                    )
+                else:
+                    # Insert new settings
+                    await db.execute(
+                        """INSERT INTO server_settings 
+                           (guild_id, intro_card_theme, intro_card_style) 
+                           VALUES (?, ?, ?)""",
+                        (settings['guild_id'], settings.get('intro_card_theme'), settings.get('intro_card_style'))
+                    )
+                
+                await db.commit()
+                return True
+            except Exception as e:
+                logging.error(f"Error saving server settings: {e}")
+                return False
 
     async def update_server_settings(self, guild_id: str, settings: Dict[str, Any]) -> int:
         """Update server settings"""

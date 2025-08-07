@@ -186,6 +186,11 @@ class IntroCardModal(discord.ui.Modal):
                     await interaction.followup.send("❌ Please enter a valid number for age.", ephemeral=True)
                     return
             
+            # Get server theme settings
+            server_settings = await database.get_server_settings(str(interaction.guild.id))
+            default_color = server_settings.get('intro_card_theme', '#7C3AED') if server_settings else '#7C3AED'
+            default_style = server_settings.get('intro_card_style', 'gradient') if server_settings else 'gradient'
+            
             # Create card data
             card_data = {
                 'user_id': str(interaction.user.id),
@@ -195,7 +200,8 @@ class IntroCardModal(discord.ui.Modal):
                 'location': self.location_input.value.strip() or None,
                 'bio': self.bio_input.value.strip(),
                 'hobbies': self.hobbies_input.value.strip() or None,
-                'favorite_color': '#7C3AED',  # Default color, can be customized later
+                'favorite_color': default_color,
+                'background_style': default_style,
             }
             
             # Save to database
@@ -219,7 +225,7 @@ class IntroCardModal(discord.ui.Modal):
                         await interaction.response.send_modal(modal)
                 
                 view = ExtendedInfoView(card_data)
-                embed.add_field(name="Next Steps", value="Use `/intro-view` to see your card\nUse `/intro-customize` to personalize it further\nOr click the button below to add more information!", inline=False)
+                embed.add_field(name="Next Steps", value="Use `/intro-view` to see your card\nClick the button below to add more information!\nNote: Card themes are managed by the bot owner.", inline=False)
                 await interaction.followup.send(embed=embed, view=view, ephemeral=True)
             else:
                 await interaction.followup.send("❌ There was an error saving your card. Please try again.", ephemeral=True)
@@ -321,7 +327,7 @@ class IntroCardAdvancedModal(discord.ui.Modal):
                     description="Your additional profile information has been updated successfully!",
                     color=0x10B981
                 )
-                embed.add_field(name="Next Steps", value="Use `/intro-view` to see your updated card\nUse `/intro-customize` to change the appearance", inline=False)
+                embed.add_field(name="Next Steps", value="Use `/intro-view` to see your updated card\nCard themes are managed by the bot owner", inline=False)
                 await interaction.followup.send(embed=embed, ephemeral=True)
             else:
                 await interaction.followup.send("❌ There was an error saving your extended information.", ephemeral=True)
@@ -331,47 +337,7 @@ class IntroCardAdvancedModal(discord.ui.Modal):
             await interaction.followup.send("❌ An error occurred while saving your extended information.", ephemeral=True)
 
 
-class IntroCardCustomizeView(discord.ui.View):
-    """View for customizing introduction card appearance"""
-    
-    def __init__(self, card_data: Dict[str, Any]):
-        super().__init__(timeout=300)
-        self.card_data = card_data
-    
-    @discord.ui.select(
-        placeholder="Choose a color theme...",
-        options=[
-            discord.SelectOption(label="Purple", description="Classic purple theme", emoji="🟣", value="#7C3AED"),
-            discord.SelectOption(label="Blue", description="Cool blue theme", emoji="🔵", value="#3B82F6"),
-            discord.SelectOption(label="Green", description="Fresh green theme", emoji="🟢", value="#10B981"),
-            discord.SelectOption(label="Pink", description="Sweet pink theme", emoji="🩷", value="#EC4899"),
-            discord.SelectOption(label="Orange", description="Warm orange theme", emoji="🟠", value="#F97316"),
-            discord.SelectOption(label="Red", description="Bold red theme", emoji="🔴", value="#EF4444"),
-        ]
-    )
-    async def color_select(self, interaction: discord.Interaction, select: discord.ui.Select):
-        """Handle color selection"""
-        self.card_data['favorite_color'] = select.values[0]
-        await database.save_intro_card(self.card_data)
-        
-        color_name = next(opt.label for opt in select.options if opt.value == select.values[0])
-        await interaction.response.send_message(f"✅ Color theme changed to {color_name}!", ephemeral=True)
-    
-    @discord.ui.select(
-        placeholder="Choose a background style...",
-        options=[
-            discord.SelectOption(label="Gradient", description="Smooth color gradient", emoji="🌈", value="gradient"),
-            discord.SelectOption(label="Solid", description="Solid color background", emoji="⬜", value="solid"),
-            discord.SelectOption(label="Pattern", description="Geometric patterns", emoji="🔶", value="pattern"),
-        ]
-    )
-    async def style_select(self, interaction: discord.Interaction, select: discord.ui.Select):
-        """Handle background style selection"""
-        self.card_data['background_style'] = select.values[0]
-        await database.save_intro_card(self.card_data)
-        
-        style_name = next(opt.label for opt in select.options if opt.value == select.values[0])
-        await interaction.response.send_message(f"✅ Background style changed to {style_name}!", ephemeral=True)
+
 
 
 class IntroCardSystem:
