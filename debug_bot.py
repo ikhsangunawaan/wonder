@@ -205,7 +205,7 @@ class BotDebugger:
             
             # Test game methods exist
             self.log_test("Coinflip method", hasattr(games_system, 'coinflip'))
-            self.log_test("Dice method", hasattr(games_system, 'dice_roll'))
+            self.log_test("Dice method", hasattr(games_system, 'dice'))
             self.log_test("Slots method", hasattr(games_system, 'slots'))
             
         except Exception as e:

@@ -34,6 +34,18 @@ class GamesSystem:
             ('🍒', '🍒', '🍒'): 2.0,   # Triple cherries
         }
         
+        # Slot machine symbols with weights and values
+        self.slot_symbols = {
+            '🍒': {'weight': 30, 'value': 2.0},
+            '🍋': {'weight': 25, 'value': 2.5},
+            '🍊': {'weight': 20, 'value': 3.0},
+            '🍇': {'weight': 15, 'value': 4.0},
+            '🔔': {'weight': 8, 'value': 5.0},
+            '🌟': {'weight': 5, 'value': 6.0},
+            '⭐': {'weight': 3, 'value': 8.0},
+            '💎': {'weight': 1, 'value': 10.0}
+        }
+        
         self.dice_faces = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅']
         
         # Animation sequences
