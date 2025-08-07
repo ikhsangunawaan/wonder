@@ -362,3 +362,52 @@ class MySQLDatabase:
         if self.pool:
             self.pool.close()
             await self.pool.wait_closed()
+
+    # Leveling system methods
+    async def get_user_level(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """Get user level data"""
+        async with await self._get_connection() as db:
+            cursor = await db.cursor(aiomysql.DictCursor)
+            await cursor.execute('SELECT * FROM user_levels WHERE user_id = %s', (user_id,))
+            result = await cursor.fetchone()
+            await cursor.close()
+            return result
+
+    async def update_user_xp(self, user_id: str, xp_gain: int) -> Tuple[int, bool]:
+        """Update user XP and return new level and whether they leveled up"""
+        async with await self._get_connection() as db:
+            cursor = await db.cursor()
+            
+            # Get current data
+            await cursor.execute(
+                'SELECT xp, level FROM user_levels WHERE user_id = %s', (user_id,)
+            )
+            current = await cursor.fetchone()
+            
+            if not current:
+                # Create new user level record
+                await cursor.execute(
+                    'INSERT INTO user_levels (user_id, xp, level) VALUES (%s, %s, %s)',
+                    (user_id, xp_gain, 1)
+                )
+                await cursor.close()
+                return 1, False
+            
+            current_xp, current_level = current
+            new_xp = current_xp + xp_gain
+            new_level = self._calculate_level(new_xp)
+            leveled_up = new_level > current_level
+            
+            await cursor.execute(
+                'UPDATE user_levels SET xp = %s, level = %s, last_xp_gain = NOW() WHERE user_id = %s',
+                (new_xp, new_level, user_id)
+            )
+            await cursor.close()
+            
+            return new_level, leveled_up
+
+    def _calculate_level(self, xp: int) -> int:
+        """Calculate level based on XP"""
+        # Simple level calculation: level = sqrt(xp / 100)
+        import math
+        return max(1, int(math.sqrt(xp / 100)) + 1)
