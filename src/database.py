@@ -1,62 +1,87 @@
 import aiosqlite
+import aiomysql
 import asyncio
 import json
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Tuple
 from pathlib import Path
 import logging
+from config import config
+from mysql_database import MySQLDatabase
 
 class Database:
-    """Async SQLite database manager for Wonder Discord Bot"""
+    """Async database manager for Wonder Discord Bot (supports SQLite and MySQL)"""
     
     def __init__(self, db_path: str = "../wonder.db"):
-        self.db_path = Path(__file__).parent / db_path
-        self.db_path.parent.mkdir(exist_ok=True)
+        # Check if MySQL is configured
+        self.db_config = config.get('database', {})
+        self.use_mysql = self.db_config.get('type') == 'mysql'
+        
+        if self.use_mysql:
+            # Use MySQL adapter
+            self.mysql_db = MySQLDatabase()
+        else:
+            # SQLite configuration (fallback)
+            self.db_path = Path(__file__).parent / db_path
+            self.db_path.parent.mkdir(exist_ok=True)
+    
+    async def _get_connection(self):
+        """Get database connection (MySQL pool or SQLite)"""
+        if self.use_mysql:
+            return await self.mysql_db._get_connection()
+        else:
+            return aiosqlite.connect(self.db_path)
         
     async def init(self):
         """Initialize database and create all tables"""
-        async with aiosqlite.connect(self.db_path) as db:
+        if self.use_mysql:
+            await self.mysql_db.init()
+            return
+            
+        async with await self._get_connection() as db:
             # Users table for economy system
-            await db.execute("""
+            users_sql = f"""
                 CREATE TABLE IF NOT EXISTS users (
-                    user_id TEXT PRIMARY KEY,
-                    username TEXT,
-                    balance INTEGER DEFAULT 0,
-                    daily_last_claimed TEXT,
-                    work_last_used TEXT,
-                    total_earned INTEGER DEFAULT 0,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    user_id VARCHAR(255) PRIMARY KEY,
+                    username {self._get_sql_syntax('text')},
+                    balance {self._get_sql_syntax('integer')} DEFAULT 0,
+                    daily_last_claimed {self._get_sql_syntax('text')},
+                    work_last_used {self._get_sql_syntax('text')},
+                    total_earned {self._get_sql_syntax('integer')} DEFAULT 0,
+                    created_at {self._get_sql_syntax('datetime')} DEFAULT {self._get_sql_syntax('current_timestamp')}
                 )
-            """)
+            """
+            await db.execute(users_sql)
 
             # Introduction cards table
-            await db.execute("""
+            intro_cards_sql = f"""
                 CREATE TABLE IF NOT EXISTS introduction_cards (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id TEXT UNIQUE,
-                    guild_id TEXT,
-                    name TEXT,
-                    age INTEGER,
-                    location TEXT,
-                    hobbies TEXT,
-                    favorite_color TEXT DEFAULT '#7C3AED',
-                    bio TEXT,
-                    social_media TEXT,
-                    occupation TEXT,
-                    pronouns TEXT,
-                    timezone TEXT,
-                    fun_fact TEXT,
-                    card_template TEXT DEFAULT 'default',
-                    background_style TEXT DEFAULT 'gradient',
-                    is_public BOOLEAN DEFAULT TRUE,
-                    is_approved BOOLEAN DEFAULT TRUE,
-                    likes_count INTEGER DEFAULT 0,
-                    views_count INTEGER DEFAULT 0,
-                    image_url TEXT,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    id {self._get_sql_syntax('integer')} {self._get_sql_syntax('primary_key')},
+                    user_id VARCHAR(255) UNIQUE,
+                    guild_id VARCHAR(255),
+                    name {self._get_sql_syntax('text')},
+                    age {self._get_sql_syntax('integer')},
+                    location {self._get_sql_syntax('text')},
+                    hobbies {self._get_sql_syntax('text')},
+                    favorite_color VARCHAR(255) DEFAULT '#7C3AED',
+                    bio {self._get_sql_syntax('text')},
+                    social_media {self._get_sql_syntax('text')},
+                    occupation {self._get_sql_syntax('text')},
+                    pronouns {self._get_sql_syntax('text')},
+                    timezone {self._get_sql_syntax('text')},
+                    fun_fact {self._get_sql_syntax('text')},
+                    card_template VARCHAR(255) DEFAULT 'default',
+                    background_style VARCHAR(255) DEFAULT 'gradient',
+                    is_public {self._get_sql_syntax('boolean')} DEFAULT TRUE,
+                    is_approved {self._get_sql_syntax('boolean')} DEFAULT TRUE,
+                    likes_count {self._get_sql_syntax('integer')} DEFAULT 0,
+                    views_count {self._get_sql_syntax('integer')} DEFAULT 0,
+                    image_url {self._get_sql_syntax('text')},
+                    created_at {self._get_sql_syntax('datetime')} DEFAULT {self._get_sql_syntax('current_timestamp')},
+                    updated_at {self._get_sql_syntax('datetime')} DEFAULT {self._get_sql_syntax('current_timestamp')}
                 )
-            """)
+            """
+            await db.execute(intro_cards_sql)
 
             # Introduction card interactions table
             await db.execute("""
@@ -301,6 +326,9 @@ class Database:
     # User economy methods
     async def get_user(self, user_id: str) -> Optional[Dict[str, Any]]:
         """Get user data from database"""
+        if self.use_mysql:
+            return await self.mysql_db.get_user(user_id)
+            
         async with aiosqlite.connect(self.db_path) as db:
             db.row_factory = aiosqlite.Row
             async with db.execute('SELECT * FROM users WHERE user_id = ?', (user_id,)) as cursor:
@@ -309,6 +337,9 @@ class Database:
 
     async def create_user(self, user_id: str, username: str) -> int:
         """Create a new user in the database"""
+        if self.use_mysql:
+            return await self.mysql_db.create_user(user_id, username)
+            
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
                 'INSERT OR IGNORE INTO users (user_id, username) VALUES (?, ?)',
@@ -319,6 +350,9 @@ class Database:
 
     async def update_balance(self, user_id: str, amount: int) -> int:
         """Update user balance by adding the specified amount"""
+        if self.use_mysql:
+            return await self.mysql_db.update_balance(user_id, amount)
+            
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
                 'UPDATE users SET balance = balance + ?, total_earned = total_earned + ? WHERE user_id = ?',
@@ -740,7 +774,9 @@ class Database:
 
     async def close(self):
         """Close database connection (for cleanup)"""
-        pass  # aiosqlite handles connections automatically
+        if self.use_mysql:
+            await self.mysql_db.close()
+        # SQLite handles connections automatically
 
 # Global database instance
 database = Database()

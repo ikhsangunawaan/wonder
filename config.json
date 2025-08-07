@@ -215,5 +215,19 @@
       "quick": {"multiplier": 2.0, "slots": 3},
       "lucky": {"multiplier": 1.5, "chance": 0.3}
     }
+  },
+  "database": {
+    "type": "mysql",
+    "host": "mc.anjas.id",
+    "port": 3306,
+    "database": "s1056_wonder_server",
+    "username": "u1056_f489WrV7JK",
+    "password": "9FG=AN^P7C5@@BG2m6Aq02Id",
+    "charset": "utf8mb4",
+    "autocommit": true,
+    "pool_settings": {
+      "minsize": 1,
+      "maxsize": 10
+    }
   }
 }
