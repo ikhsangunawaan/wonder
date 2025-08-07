@@ -4,7 +4,7 @@ import asyncio
 import random
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import math
 
 from database import database

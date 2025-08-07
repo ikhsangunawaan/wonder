@@ -82,9 +82,31 @@ class Database:
                     intro_card_theme TEXT DEFAULT '#7C3AED',
                     intro_card_style TEXT DEFAULT 'gradient',
                     intro_card_background_url TEXT,
+                    category_text_enabled BOOLEAN DEFAULT TRUE,
+                    category_voice_enabled BOOLEAN DEFAULT TRUE,
+                    category_role_enabled BOOLEAN DEFAULT TRUE,
+                    category_overall_enabled BOOLEAN DEFAULT TRUE,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+            
+            # Add category columns to existing tables if they don't exist
+            try:
+                await db.execute("ALTER TABLE server_settings ADD COLUMN category_text_enabled BOOLEAN DEFAULT TRUE")
+            except:
+                pass
+            try:
+                await db.execute("ALTER TABLE server_settings ADD COLUMN category_voice_enabled BOOLEAN DEFAULT TRUE")
+            except:
+                pass
+            try:
+                await db.execute("ALTER TABLE server_settings ADD COLUMN category_role_enabled BOOLEAN DEFAULT TRUE")
+            except:
+                pass
+            try:
+                await db.execute("ALTER TABLE server_settings ADD COLUMN category_overall_enabled BOOLEAN DEFAULT TRUE")
+            except:
+                pass
 
             # Transaction history
             await db.execute("""
@@ -649,6 +671,72 @@ class Database:
                 if row:
                     return datetime.fromisoformat(row[0])
                 return None
+
+    async def cleanup_expired_cooldowns(self) -> None:
+        """Clean up expired cooldowns (older than 24 hours)"""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                'DELETE FROM cooldowns WHERE datetime(last_used) < datetime("now", "-24 hours")'
+            )
+            await db.commit()
+    
+    # Category Settings Methods
+    async def get_category_settings(self, guild_id: str) -> Dict[str, bool]:
+        """Get category enable/disable settings for a guild"""
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("""
+                SELECT category_text_enabled, category_voice_enabled, 
+                       category_role_enabled, category_overall_enabled
+                FROM server_settings WHERE guild_id = ?
+            """, (guild_id,)) as cursor:
+                row = await cursor.fetchone()
+                if row:
+                    return {
+                        'text': bool(row[0]) if row[0] is not None else True,
+                        'voice': bool(row[1]) if row[1] is not None else True,
+                        'role': bool(row[2]) if row[2] is not None else True,
+                        'overall': bool(row[3]) if row[3] is not None else True
+                    }
+                else:
+                    # Return defaults if no settings found
+                    return {'text': True, 'voice': True, 'role': True, 'overall': True}
+    
+    async def set_category_enabled(self, guild_id: str, category: str, enabled: bool) -> bool:
+        """Set category enabled/disabled for a guild"""
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                # First ensure the guild has an entry in server_settings
+                await db.execute("""
+                    INSERT OR IGNORE INTO server_settings (guild_id) VALUES (?)
+                """, (guild_id,))
+                
+                # Update the specific category
+                column_map = {
+                    'text': 'category_text_enabled',
+                    'voice': 'category_voice_enabled',
+                    'role': 'category_role_enabled',
+                    'overall': 'category_overall_enabled'
+                }
+                
+                if category not in column_map:
+                    return False
+                
+                await db.execute(f"""
+                    UPDATE server_settings 
+                    SET {column_map[category]} = ?
+                    WHERE guild_id = ?
+                """, (enabled, guild_id))
+                
+                await db.commit()
+                return True
+        except Exception as e:
+            logging.error(f"Error setting category {category} to {enabled} for guild {guild_id}: {e}")
+            return False
+    
+    async def is_category_enabled(self, guild_id: str, category: str) -> bool:
+        """Check if a specific category is enabled for a guild"""
+        settings = await self.get_category_settings(guild_id)
+        return settings.get(category, True)  # Default to True if not found
 
     async def close(self):
         """Close database connection (for cleanup)"""

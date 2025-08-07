@@ -143,6 +143,59 @@
       "currencyRewards": true,
       "roleRewards": true,
       "titleRewards": true
+    },
+    "levelRoles": {
+      "text": {
+        "5": {"name": "Text Chatter", "color": "#7FDBFF", "perks": ["Basic text rewards"]},
+        "10": {"name": "Conversationalist", "color": "#39CCCC", "perks": ["10% XP bonus", "Access to special channels"]},
+        "20": {"name": "Text Master", "color": "#01FF70", "perks": ["15% XP bonus", "Custom emoji privileges"]},
+        "30": {"name": "Chat Legend", "color": "#FFDC00", "perks": ["20% XP bonus", "Voice channel creation"]},
+        "40": {"name": "Text Virtuoso", "color": "#FF851B", "perks": ["25% XP bonus", "Mention everyone permission"]},
+        "50": {"name": "Supreme Wordsmith", "color": "#B10DC9", "perks": ["30% XP bonus", "All text privileges"]}
+      },
+      "voice": {
+        "5": {"name": "Voice Newcomer", "color": "#7FDBFF", "perks": ["Voice activity tracking"]},
+        "10": {"name": "Voice Regular", "color": "#39CCCC", "perks": ["Priority speaker", "Voice XP bonus 10%"]},
+        "20": {"name": "Voice Expert", "color": "#01FF70", "perks": ["Voice XP bonus 15%", "Screen share priority"]},
+        "30": {"name": "Voice Master", "color": "#FFDC00", "perks": ["Voice XP bonus 20%", "Channel mod powers"]},
+        "40": {"name": "Voice Virtuoso", "color": "#FF851B", "perks": ["Voice XP bonus 25%", "Voice channel admin"]},
+        "50": {"name": "Voice Legend", "color": "#B10DC9", "perks": ["Voice XP bonus 30%", "All voice privileges"]}
+      },
+      "role": {
+        "5": {"name": "Helper", "color": "#7FDBFF", "perks": ["Basic role activities"]},
+        "10": {"name": "Community Member", "color": "#39CCCC", "perks": ["Event notifications", "Role XP bonus 10%"]},
+        "20": {"name": "Community Leader", "color": "#01FF70", "perks": ["Event creation", "Role XP bonus 15%"]},
+        "30": {"name": "Community Hero", "color": "#FFDC00", "perks": ["Mod suggestions", "Role XP bonus 20%"]},
+        "40": {"name": "Community Champion", "color": "#FF851B", "perks": ["Community events", "Role XP bonus 25%"]},
+        "50": {"name": "Community Legend", "color": "#B10DC9", "perks": ["All community privileges", "Role XP bonus 30%"]}
+      },
+      "overall": {
+        "10": {"name": "Wonder Apprentice", "color": "#85FFBD", "perks": ["Overall 5% bonus", "Special badge"]},
+        "20": {"name": "Wonder Adept", "color": "#FFFB7D", "perks": ["Overall 10% bonus", "Custom status"]},
+        "30": {"name": "Wonder Expert", "color": "#FFB86F", "perks": ["Overall 15% bonus", "Priority support"]},
+        "40": {"name": "Wonder Master", "color": "#FF8A8A", "perks": ["Overall 20% bonus", "VIP features"]},
+        "50": {"name": "Wonder Grandmaster", "color": "#D299C2", "perks": ["Overall 25% bonus", "All privileges"]}
+      }
+    },
+    "prestigeSystem": {
+      "enabled": true,
+      "requirements": {
+        "allCategoriesLevel50": true,
+        "minimumActivity": 1000,
+        "communityContribution": 500
+      },
+      "rewards": {
+        "prestigeRoles": true,
+        "specialPerks": true,
+        "permanentBonuses": true
+      },
+      "levels": {
+        "1": {"name": "★ Wonder Prestige I", "color": "#FFD700", "bonus": 0.35},
+        "2": {"name": "★★ Wonder Prestige II", "color": "#FF6B35", "bonus": 0.40},
+        "3": {"name": "★★★ Wonder Prestige III", "color": "#F7931E", "bonus": 0.45},
+        "4": {"name": "★★★★ Wonder Prestige IV", "color": "#FF1744", "bonus": 0.50},
+        "5": {"name": "★★★★★ Wonder Prestige V", "color": "#E91E63", "bonus": 0.60}
+      }
     }
   },
   "drops": {

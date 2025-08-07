@@ -45,8 +45,12 @@ class WonderBot(commands.Bot):
         intents.reactions = True
         intents.voice_states = True
         
+        # Support multiple prefixes
+        def get_prefix(bot, message):
+            return ['w.', '/']
+        
         super().__init__(
-            command_prefix=config.prefix,
+            command_prefix=get_prefix,
             intents=intents,
             help_command=None,
             case_insensitive=True
@@ -151,24 +155,64 @@ class WonderBot(commands.Bot):
         # await self.handle_welcome(member)
     
     async def on_command_error(self, ctx: commands.Context, error: Exception):
-        """Handle command errors"""
+        """Handle command errors with detailed information"""
         if isinstance(error, commands.CommandNotFound):
             return
         
+        command_name = ctx.command.name if ctx.command else "unknown"
+        
         if isinstance(error, commands.MissingRequiredArgument):
-            await ctx.send(f"❌ Missing required argument: `{error.param.name}`")
+            additional_info = f"Missing parameter: `{error.param.name}`"
+            await send_command_error(ctx, "missing_argument", command_name, additional_info)
             return
         
         if isinstance(error, commands.BadArgument):
-            await ctx.send(f"❌ Invalid argument provided")
+            additional_info = f"Please check your input format and try again."
+            await send_command_error(ctx, "bad_argument", command_name, additional_info)
             return
         
         if isinstance(error, commands.CommandOnCooldown):
-            await ctx.send(f"❌ Command is on cooldown. Try again in {error.retry_after:.2f} seconds")
+            cooldown_time = f"{error.retry_after:.1f} seconds" if error.retry_after < 60 else f"{error.retry_after/60:.1f} minutes"
+            additional_info = f"Try again in {cooldown_time}"
+            await send_command_error(ctx, "cooldown", command_name, additional_info)
             return
         
-        logging.error(f"Command error: {error}")
-        await ctx.send("❌ An error occurred while executing the command!")
+        if isinstance(error, commands.MissingPermissions):
+            required_perms = ", ".join(error.missing_permissions)
+            additional_info = f"Required permissions: {required_perms}"
+            await send_command_error(ctx, "permission", command_name, additional_info)
+            return
+        
+        if isinstance(error, commands.BotMissingPermissions):
+            missing_perms = ", ".join(error.missing_permissions)
+            additional_info = f"Bot is missing permissions: {missing_perms}"
+            await send_command_error(ctx, "bot_permission", command_name, additional_info)
+            return
+        
+        if isinstance(error, commands.NoPrivateMessage):
+            additional_info = "This command can only be used in servers, not in DMs."
+            await send_command_error(ctx, "no_dm", command_name, additional_info)
+            return
+        
+        if isinstance(error, commands.ChannelNotFound):
+            additional_info = "The specified channel could not be found."
+            await send_command_error(ctx, "channel_not_found", command_name, additional_info)
+            return
+        
+        if isinstance(error, commands.MemberNotFound):
+            additional_info = "The specified user could not be found."
+            await send_command_error(ctx, "member_not_found", command_name, additional_info)
+            return
+        
+        if isinstance(error, commands.RoleNotFound):
+            additional_info = "The specified role could not be found."
+            await send_command_error(ctx, "role_not_found", command_name, additional_info)
+            return
+        
+        # Log unexpected errors
+        logging.error(f"Command error in {command_name}: {error}")
+        additional_info = f"Unexpected error occurred. Please try again or contact support."
+        await send_command_error(ctx, "unexpected", command_name, additional_info)
     
     async def on_reaction_add(self, reaction: discord.Reaction, user: discord.User):
         """Handle reaction additions"""
@@ -204,10 +248,16 @@ class WonderBot(commands.Bot):
 
 # Economy Commands (Hybrid: both prefix and slash)
 @commands.hybrid_command(name='balance', aliases=['bal'])
-@app_commands.describe(user='User to check balance for (optional)')
-async def balance(ctx: commands.Context, user: discord.Member = None):
+@app_commands.describe(user='User to check balance for (mention or ID - optional)')
+async def balance(ctx: commands.Context, user: str = None):
     """Check your balance or another user's balance"""
-    target_user = user or ctx.author
+    if user:
+        target_user = parse_user_mention_or_id(user, ctx.guild)
+        if not target_user:
+            await send_command_error(ctx, "member_not_found", "balance", f"User '{user}' not found. Use mention (@user) or ID.")
+            return
+    else:
+        target_user = ctx.author
     
     user_data = await ctx.bot.database.get_user(str(target_user.id))
     if not user_data:
@@ -438,6 +488,25 @@ async def leaderboard(ctx: commands.Context):
 )
 async def coinflip(ctx: commands.Context, bet_amount: int, choice: str):
     """Play animated wonder coinflip game"""
+    # Validate bet amount
+    min_bet = config.games['coinflip']['minBet']
+    max_bet = config.games['coinflip']['maxBet']
+    
+    if bet_amount < min_bet or bet_amount > max_bet:
+        await send_command_error(
+            ctx, "bad_argument", "coinflip", 
+            f"Bet amount must be between {min_bet} and {max_bet} WonderCoins."
+        )
+        return
+    
+    # Validate choice
+    if choice.lower() not in ['h', 'heads', 't', 'tails']:
+        await send_command_error(
+            ctx, "bad_argument", "coinflip", 
+            f"Choice must be 'h', 'heads', 't', or 'tails'."
+        )
+        return
+    
     result = await ctx.bot.games_system.coinflip(str(ctx.author.id), bet_amount, choice, ctx)
     
     if not result['success']:
@@ -460,6 +529,25 @@ async def coinflip(ctx: commands.Context, bet_amount: int, choice: str):
 )
 async def dice(ctx: commands.Context, bet_amount: int, target: int):
     """Play animated wonder dice game"""
+    # Validate bet amount
+    min_bet = config.games['dice']['minBet']
+    max_bet = config.games['dice']['maxBet']
+    
+    if bet_amount < min_bet or bet_amount > max_bet:
+        await send_command_error(
+            ctx, "bad_argument", "dice", 
+            f"Bet amount must be between {min_bet} and {max_bet} WonderCoins."
+        )
+        return
+    
+    # Validate target number
+    if target < 1 or target > 6:
+        await send_command_error(
+            ctx, "bad_argument", "dice", 
+            f"Target number must be between 1 and 6."
+        )
+        return
+    
     result = await ctx.bot.games_system.dice(str(ctx.author.id), bet_amount, target, ctx)
     
     if not result['success']:
@@ -479,6 +567,17 @@ async def dice(ctx: commands.Context, bet_amount: int, target: int):
 @app_commands.describe(bet_amount='Amount of WonderCoins to bet')
 async def slots(ctx: commands.Context, bet_amount: int):
     """Play animated wonder slot machine"""
+    # Validate bet amount
+    min_bet = config.games['slots']['minBet']
+    max_bet = config.games['slots']['maxBet']
+    
+    if bet_amount < min_bet or bet_amount > max_bet:
+        await send_command_error(
+            ctx, "bad_argument", "slots", 
+            f"Bet amount must be between {min_bet} and {max_bet} WonderCoins."
+        )
+        return
+    
     result = await ctx.bot.games_system.slots(str(ctx.author.id), bet_amount, ctx)
     
     if not result['success']:
@@ -494,21 +593,30 @@ async def slots(ctx: commands.Context, bet_amount: int):
     # Animation message is already updated in the game method
     # No need to send another message if animation was shown
 
-@commands.command(name='gamestats')
-async def gamestats(ctx: commands.Context, user: discord.Member = None):
+@commands.hybrid_command(name='gamestats')
+@app_commands.describe(user='User to check gambling stats for (mention or ID - optional)')
+async def gamestats(ctx: commands.Context, user: str = None):
     """View gambling statistics"""
-    target_user = user or ctx.author
+    if user:
+        target_user = parse_user_mention_or_id(user, ctx.guild)
+        if not target_user:
+            await send_command_error(ctx, "member_not_found", "gamestats", f"User '{user}' not found. Use mention (@user) or ID.")
+            return
+    else:
+        target_user = ctx.author
     embed = await ctx.bot.games_system.create_gambling_stats_embed(str(target_user.id), target_user.display_name)
     await ctx.send(embed=embed)
 
 # Shop Commands
-@commands.command(name='shop')
+@commands.hybrid_command(name='shop')
+@app_commands.describe(category='Shop category to view', page='Page number')
 async def shop(ctx: commands.Context, category: str = 'all', page: int = 1):
     """View the shop"""
     embed = await ctx.bot.shop_system.get_shop_embed(category, page)
     await ctx.send(embed=embed)
 
-@commands.command(name='buy')
+@commands.hybrid_command(name='buy')
+@app_commands.describe(item_id='ID of the item to buy', quantity='Number of items to buy')
 async def buy(ctx: commands.Context, item_id: str, quantity: int = 1):
     """Buy an item from the shop"""
     result = await ctx.bot.shop_system.purchase_item(str(ctx.author.id), item_id, quantity)
@@ -524,13 +632,15 @@ async def buy(ctx: commands.Context, item_id: str, quantity: int = 1):
     
     await ctx.send(embed=embed)
 
-@commands.command(name='inventory', aliases=['inv'])
+@commands.hybrid_command(name='inventory', aliases=['inv'])
+@app_commands.describe(page='Page number of inventory to view')
 async def inventory(ctx: commands.Context, page: int = 1):
     """View your inventory"""
     embed = await ctx.bot.shop_system.get_inventory_embed(str(ctx.author.id), page)
     await ctx.send(embed=embed)
 
-@commands.command(name='use')
+@commands.hybrid_command(name='use')
+@app_commands.describe(item_id='ID of the item to use')
 async def use_item(ctx: commands.Context, item_id: str):
     """Use an item from inventory"""
     result = await ctx.bot.shop_system.use_item(str(ctx.author.id), item_id)
@@ -544,10 +654,28 @@ async def use_item(ctx: commands.Context, item_id: str):
     await ctx.send(embed=embed)
 
 # Leveling Commands
-@commands.command(name='rank')
-async def rank(ctx: commands.Context, user: discord.Member = None):
-    """View your or someone's rank"""
-    target_user = user or ctx.author
+@commands.hybrid_command(name='rank')
+@app_commands.describe(user='User to check rank for (mention or ID - optional)')
+async def rank(ctx: commands.Context, user: str = None):
+    """View comprehensive rank information across all categories"""
+    # Check if any leveling categories are enabled
+    category_settings = await ctx.bot.database.get_category_settings(str(ctx.guild.id))
+    if not any(category_settings.values()):
+        embed = discord.Embed(
+            title="❌ Leveling Disabled",
+            description="All leveling categories are currently disabled on this server.",
+            color=int(config.colors['error'].replace('#', ''), 16)
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    if user:
+        target_user = parse_user_mention_or_id(user, ctx.guild)
+        if not target_user:
+            await send_command_error(ctx, "member_not_found", "rank", f"User '{user}' not found. Use mention (@user) or ID.")
+            return
+    else:
+        target_user = ctx.author
     rank_info = await ctx.bot.leveling_system.get_user_rank(str(target_user.id))
     
     if not rank_info:
@@ -555,42 +683,670 @@ async def rank(ctx: commands.Context, user: discord.Member = None):
         return
     
     embed = discord.Embed(
-        title=f"📊 Rank - {target_user.display_name}",
+        title=f"🌟 Comprehensive Rank - {target_user.display_name}",
+        description="*Multi-Category Leveling System*",
         color=int(config.colors['primary'].replace('#', ''), 16)
     )
     
-    embed.add_field(
-        name="📈 Level",
-        value=f"**{rank_info['level']}**",
-        inline=True
-    )
+    # Add category information
+    categories = {
+        'text': {'emoji': '💬', 'name': 'Text Chat'},
+        'voice': {'emoji': '🎤', 'name': 'Voice Activity'},
+        'role': {'emoji': '🎭', 'name': 'Community Role'},
+        'overall': {'emoji': '⭐', 'name': 'Overall Progress'}
+    }
     
-    embed.add_field(
-        name="✨ XP",
-        value=f"{rank_info['xp']:,}",
-        inline=True
-    )
-    
-    if rank_info['xp_needed'] > 0:
+    for category, info in categories.items():
+        # Only show enabled categories
+        if not category_settings.get(category, True):
+            continue
+            
+        level_data = rank_info['levels'].get(category, {})
+        current_role = rank_info['roles_earned'].get(category)
+        next_role = rank_info['next_roles'].get(category)
+        
+        level = level_data.get('level', 0)
+        xp = level_data.get('xp', 0)
+        xp_needed = level_data.get('xp_needed', 0)
+        
+        # Build field value
+        field_value = f"**Level {level}** • {xp:,} XP"
+        
+        if current_role:
+            field_value += f"\n🏆 **{current_role['name']}**"
+            if current_role['perks']:
+                field_value += f"\n🎁 {', '.join(current_role['perks'][:2])}"
+        
+        if next_role and xp_needed > 0:
+            field_value += f"\n\n🎯 Next: **{next_role['name']}** ({next_role['levels_needed']} levels)"
+        elif level >= 50:
+            field_value += f"\n\n🏆 **MAX LEVEL REACHED!**"
+        
         embed.add_field(
-            name="🎯 Next Level",
-            value=f"{rank_info['xp_needed']:,} XP needed",
+            name=f"{info['emoji']} {info['name']}",
+            value=field_value,
             inline=True
         )
-    else:
+    
+    # Add prestige information if eligible
+    prestige_info = rank_info.get('prestige_info', {})
+    if prestige_info.get('eligible'):
         embed.add_field(
-            name="🏆 Max Level",
-            value="Level cap reached!",
-            inline=True
+            name="⭐ Prestige Eligible",
+            value="🌟 **You can prestige!**\nAll categories at level 50\nUnlock exclusive benefits",
+            inline=False
         )
     
+    # Add statistics
+    stats_value = f"💬 **Messages:** {rank_info['total_messages']:,}\n"
+    if rank_info.get('total_voice_time'):
+        hours = rank_info['total_voice_time'] // 3600
+        stats_value += f"🎤 **Voice Time:** {hours:,} hours\n"
+    
+    prestige_level = rank_info.get('prestige_level', 0)
+    if prestige_level > 0:
+        stats_value += f"⭐ **Prestige Level:** {prestige_level}"
+    
     embed.add_field(
-        name="💬 Messages",
-        value=f"{rank_info['total_messages']:,}",
-        inline=True
+        name="📊 Statistics",
+        value=stats_value,
+        inline=False
     )
     
     embed.set_thumbnail(url=target_user.display_avatar.url)
+    embed.set_footer(text="Wonder Leveling System • Progress across all activities")
+    
+    await ctx.send(embed=embed)
+
+@commands.hybrid_command(name='roles')
+@app_commands.describe(category='Category to view roles for (text/voice/role/overall)')
+async def level_roles(ctx: commands.Context, category: str = None):
+    """View all available level roles and their requirements"""
+    # Check category settings
+    category_settings = await ctx.bot.database.get_category_settings(str(ctx.guild.id))
+    
+    level_roles_config = config.get('leveling.levelRoles', {})
+    
+    if not level_roles_config:
+        await ctx.send("❌ Level roles system is not configured.")
+        return
+    
+    embed = discord.Embed(
+        title="🏆 Wonder Level Roles System",
+        description="*Earn roles and perks as you level up in different categories*",
+        color=int(config.colors['primary'].replace('#', ''), 16)
+    )
+    
+    # If specific category requested
+    if category and category.lower() in level_roles_config:
+        cat_name = category.lower()
+        category_roles = level_roles_config[cat_name]
+        
+        category_names = {
+            'text': '💬 Text Chat Roles',
+            'voice': '🎤 Voice Activity Roles', 
+            'role': '🎭 Community Role Roles',
+            'overall': '⭐ Overall Progress Roles'
+        }
+        
+        embed.title = f"🏆 {category_names.get(cat_name, f'{cat_name.title()} Roles')}"
+        
+        for level in sorted([int(x) for x in category_roles.keys()]):
+            role_info = category_roles[str(level)]
+            
+            field_value = f"**Color:** {role_info['color']}\n"
+            field_value += f"**Perks:** {', '.join(role_info['perks'])}"
+            
+            embed.add_field(
+                name=f"Level {level} - {role_info['name']}",
+                value=field_value,
+                inline=False
+            )
+    
+    else:
+        # Show overview of all categories
+        category_info = {
+            'text': {'emoji': '💬', 'name': 'Text Chat', 'desc': 'Earned through messaging'},
+            'voice': {'emoji': '🎤', 'name': 'Voice Activity', 'desc': 'Earned through voice participation'},
+            'role': {'emoji': '🎭', 'name': 'Community Role', 'desc': 'Earned through community activities'},
+            'overall': {'emoji': '⭐', 'name': 'Overall Progress', 'desc': 'Combined progress across all categories'}
+        }
+        
+        for cat_key, cat_data in category_info.items():
+            if cat_key in level_roles_config:
+                roles = level_roles_config[cat_key]
+                role_count = len(roles)
+                max_level = max([int(x) for x in roles.keys()]) if roles else 0
+                
+                field_value = f"{cat_data['desc']}\n"
+                field_value += f"**{role_count} roles** available (Level 5-{max_level})\n"
+                field_value += f"Use `/roles {cat_key}` for details"
+                
+                embed.add_field(
+                    name=f"{cat_data['emoji']} {cat_data['name']}",
+                    value=field_value,
+                    inline=True
+                )
+    
+    # Add prestige information
+    prestige_config = config.get('leveling.prestigeSystem', {})
+    if prestige_config.get('enabled'):
+        prestige_levels = prestige_config.get('levels', {})
+        prestige_value = f"Unlock after reaching Level 50 in all categories\n"
+        prestige_value += f"**{len(prestige_levels)} Prestige Levels** available\n"
+        prestige_value += f"Permanent bonuses and exclusive perks"
+        
+        embed.add_field(
+            name="⭐ Prestige System",
+            value=prestige_value,
+            inline=False
+        )
+    
+    embed.set_footer(text="Use /rank to see your current progress • /roles <category> for detailed role info")
+    
+    await ctx.send(embed=embed)
+
+@commands.hybrid_command(name='prestige')
+async def prestige_info(ctx: commands.Context):
+    """View prestige system information and requirements"""
+    prestige_config = config.get('leveling.prestigeSystem', {})
+    
+    if not prestige_config.get('enabled'):
+        await ctx.send("❌ Prestige system is not enabled.")
+        return
+    
+    embed = discord.Embed(
+        title="⭐ Wonder Prestige System",
+        description="*Ultimate achievement for dedicated community members*",
+        color=int('#FFD700'.replace('#', ''), 16)
+    )
+    
+    # Requirements
+    requirements = prestige_config.get('requirements', {})
+    req_value = ""
+    if requirements.get('allCategoriesLevel50'):
+        req_value += "🏆 **Level 50** in all categories (Text, Voice, Role, Overall)\n"
+    if requirements.get('minimumActivity'):
+        req_value += f"📊 **{requirements['minimumActivity']}** minimum activity points\n"
+    if requirements.get('communityContribution'):
+        req_value += f"🤝 **{requirements['communityContribution']}** community contribution points\n"
+    
+    embed.add_field(
+        name="📋 Requirements",
+        value=req_value,
+        inline=False
+    )
+    
+    # Prestige levels
+    levels = prestige_config.get('levels', {})
+    for level in sorted([int(x) for x in levels.keys()]):
+        level_info = levels[str(level)]
+        bonus_percent = int(level_info['bonus'] * 100)
+        
+        embed.add_field(
+            name=f"⭐ {level_info['name']}",
+            value=f"**{bonus_percent}% XP Bonus** for all activities\nExclusive perks and recognition",
+            inline=True
+        )
+    
+    # Benefits
+    rewards = prestige_config.get('rewards', {})
+    benefits_value = ""
+    if rewards.get('prestigeRoles'):
+        benefits_value += "🏆 Exclusive prestige roles with unique colors\n"
+    if rewards.get('specialPerks'):
+        benefits_value += "🎁 Special server perks and privileges\n"
+    if rewards.get('permanentBonuses'):
+        benefits_value += "⚡ Permanent XP bonuses that stack\n"
+    
+    embed.add_field(
+        name="🎁 Benefits",
+        value=benefits_value,
+        inline=False
+    )
+    
+    embed.set_footer(text="Use /rank to check your prestige eligibility")
+    
+    await ctx.send(embed=embed)
+
+# =============================================================================
+# ADMIN LEVELING MANAGEMENT COMMANDS
+# =============================================================================
+
+@commands.hybrid_command(name='toggle-category')
+@commands.has_permissions(administrator=True)
+@app_commands.describe(category='Category to toggle (text/voice/role/overall)', enabled='Enable or disable the category')
+async def toggle_category(ctx: commands.Context, category: str, enabled: bool):
+    """Enable or disable a leveling category (Admin only)"""
+    valid_categories = ['text', 'voice', 'role', 'overall']
+    
+    if category.lower() not in valid_categories:
+        await send_command_error(ctx, "bad_argument", "toggle-category", f"Category must be one of: {', '.join(valid_categories)}")
+        return
+    
+    category = category.lower()
+    
+    # Update category setting in database
+    success = await ctx.bot.database.set_category_enabled(str(ctx.guild.id), category, enabled)
+    
+    if not success:
+        embed = discord.Embed(
+            title="❌ Error",
+            description="Failed to update category setting. Please try again.",
+            color=int(config.colors['error'].replace('#', ''), 16)
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    status = "enabled" if enabled else "disabled"
+    color = int(config.colors['success' if enabled else 'warning'].replace('#', ''), 16)
+    
+    embed = discord.Embed(
+        title=f"⚙️ Category {status.title()}",
+        description=f"**{category.title()}** category has been **{status}** for this server.",
+        color=color
+    )
+    
+    embed.add_field(
+        name="🔄 Effect",
+        value=f"All {category} leveling features are now **{status}**.\n"
+              f"This affects: XP gain, level up messages, rank display, and related commands.",
+        inline=False
+    )
+    
+    # Show current status of all categories
+    current_settings = await ctx.bot.database.get_category_settings(str(ctx.guild.id))
+    status_text = []
+    for cat, is_enabled in current_settings.items():
+        status_emoji = "✅" if is_enabled else "❌"
+        status_text.append(f"{status_emoji} **{cat.title()}**: {'Enabled' if is_enabled else 'Disabled'}")
+    
+    embed.add_field(
+        name="📋 Current Category Status",
+        value="\n".join(status_text),
+        inline=False
+    )
+    
+    await ctx.send(embed=embed)
+
+@commands.hybrid_command(name='set-user-xp')
+@commands.has_permissions(administrator=True)
+@app_commands.describe(user='User to modify (mention or ID)', category='XP category (text/voice/role/overall)', amount='XP amount to set')
+async def set_user_xp(ctx: commands.Context, user: str, category: str, amount: int):
+    """Set user's XP in a specific category (Admin only)"""
+    valid_categories = ['text', 'voice', 'role', 'overall']
+    
+    if category.lower() not in valid_categories:
+        await send_command_error(ctx, "bad_argument", "set-user-xp", f"Category must be one of: {', '.join(valid_categories)}")
+        return
+    
+    category = category.lower()
+    
+    # Check if category is enabled
+    if not await ctx.bot.database.is_category_enabled(str(ctx.guild.id), category):
+        embed = discord.Embed(
+            title="❌ Category Disabled",
+            description=f"The **{category}** category is currently disabled on this server.\n"
+                       f"Enable it first with `w.toggle-category {category} true`",
+            color=int(config.colors['error'].replace('#', ''), 16)
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    target_user = parse_user_mention_or_id(user, ctx.guild)
+    if not target_user:
+        await send_command_error(ctx, "member_not_found", "set-user-xp", f"User '{user}' not found. Use mention (@user) or ID.")
+        return
+    
+    if amount < 0:
+        await send_command_error(ctx, "bad_argument", "set-user-xp", "XP amount cannot be negative.")
+        return
+    
+    category = category.lower()
+    
+    # Set user XP
+    user_data = await database.get_user(str(target_user.id))
+    if not user_data:
+        user_data = {'user_id': str(target_user.id)}
+    
+    old_xp = user_data.get(f'{category}_xp', 0)
+    user_data[f'{category}_xp'] = amount
+    
+    # Calculate new level
+    from leveling_system import LevelingSystem
+    level_system = LevelingSystem(None)
+    new_level = level_system.level_formula['calculateLevel'](amount)
+    old_level = level_system.level_formula['calculateLevel'](old_xp)
+    
+    success = await database.save_user(user_data)
+    
+    if success:
+        embed = discord.Embed(
+            title="⚙️ User XP Updated",
+            description=f"**{target_user.display_name}**'s {category} XP has been set.",
+            color=int(config.colors['success'].replace('#', ''), 16)
+        )
+        
+        embed.add_field(
+            name="📊 Changes",
+            value=f"**Category:** {category.title()}\n"
+                  f"**Old XP:** {old_xp:,}\n"
+                  f"**New XP:** {amount:,}\n"
+                  f"**Old Level:** {old_level}\n"
+                  f"**New Level:** {new_level}",
+            inline=True
+        )
+        
+        if new_level != old_level:
+            embed.add_field(
+                name="🎉 Level Change",
+                value=f"Level changed from **{old_level}** to **{new_level}**",
+                inline=True
+            )
+    else:
+        embed = discord.Embed(
+            title="❌ Error",
+            description="Failed to update user XP. Please try again.",
+            color=int(config.colors['error'].replace('#', ''), 16)
+        )
+    
+    await ctx.send(embed=embed)
+
+@commands.hybrid_command(name='add-user-xp')
+@commands.has_permissions(administrator=True)
+@app_commands.describe(user='User to modify (mention or ID)', category='XP category (text/voice/role/overall)', amount='XP amount to add')
+async def add_user_xp(ctx: commands.Context, user: str, category: str, amount: int):
+    """Add XP to user in a specific category (Admin only)"""
+    valid_categories = ['text', 'voice', 'role', 'overall']
+    
+    if category.lower() not in valid_categories:
+        await send_command_error(ctx, "bad_argument", "add-user-xp", f"Category must be one of: {', '.join(valid_categories)}")
+        return
+    
+    category = category.lower()
+    
+    # Check if category is enabled
+    if not await ctx.bot.database.is_category_enabled(str(ctx.guild.id), category):
+        embed = discord.Embed(
+            title="❌ Category Disabled",
+            description=f"The **{category}** category is currently disabled on this server.\n"
+                       f"Enable it first with `w.toggle-category {category} true`",
+            color=int(config.colors['error'].replace('#', ''), 16)
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    target_user = parse_user_mention_or_id(user, ctx.guild)
+    if not target_user:
+        await send_command_error(ctx, "member_not_found", "add-user-xp", f"User '{user}' not found. Use mention (@user) or ID.")
+        return
+    
+    category = category.lower()
+    
+    # Add user XP
+    user_data = await database.get_user(str(target_user.id))
+    if not user_data:
+        user_data = {'user_id': str(target_user.id)}
+    
+    old_xp = user_data.get(f'{category}_xp', 0)
+    new_xp = max(0, old_xp + amount)  # Ensure XP doesn't go negative
+    user_data[f'{category}_xp'] = new_xp
+    
+    # Calculate levels
+    from leveling_system import LevelingSystem
+    level_system = LevelingSystem(None)
+    new_level = level_system.level_formula['calculateLevel'](new_xp)
+    old_level = level_system.level_formula['calculateLevel'](old_xp)
+    
+    success = await database.save_user(user_data)
+    
+    if success:
+        embed = discord.Embed(
+            title="⚙️ User XP Modified",
+            description=f"**{target_user.display_name}**'s {category} XP has been modified.",
+            color=int(config.colors['success'].replace('#', ''), 16)
+        )
+        
+        embed.add_field(
+            name="📊 Changes",
+            value=f"**Category:** {category.title()}\n"
+                  f"**XP Change:** {amount:+,}\n"
+                  f"**Old XP:** {old_xp:,}\n"
+                  f"**New XP:** {new_xp:,}\n"
+                  f"**Level:** {old_level} → {new_level}",
+            inline=True
+        )
+        
+        if new_level != old_level:
+            level_change = "increased" if new_level > old_level else "decreased"
+            embed.add_field(
+                name=f"🎉 Level {level_change.title()}",
+                value=f"Level {level_change} by **{abs(new_level - old_level)}**",
+                inline=True
+            )
+    else:
+        embed = discord.Embed(
+            title="❌ Error",
+            description="Failed to modify user XP. Please try again.",
+            color=int(config.colors['error'].replace('#', ''), 16)
+        )
+    
+    await ctx.send(embed=embed)
+
+@commands.hybrid_command(name='reset-user-xp')
+@commands.has_permissions(administrator=True)
+@app_commands.describe(user='User to reset (mention or ID)', category='XP category to reset (text/voice/role/overall/all)')
+async def reset_user_xp(ctx: commands.Context, user: str, category: str = 'all'):
+    """Reset user's XP in specific category or all categories (Admin only)"""
+    valid_categories = ['text', 'voice', 'role', 'overall', 'all']
+    
+    if category.lower() not in valid_categories:
+        await send_command_error(ctx, "bad_argument", "reset-user-xp", f"Category must be one of: {', '.join(valid_categories)}")
+        return
+    
+    target_user = parse_user_mention_or_id(user, ctx.guild)
+    if not target_user:
+        await send_command_error(ctx, "member_not_found", "reset-user-xp", f"User '{user}' not found. Use mention (@user) or ID.")
+        return
+    
+    category = category.lower()
+    
+    # Check if specific category is enabled (skip for 'all')
+    if category != 'all':
+        if not await ctx.bot.database.is_category_enabled(str(ctx.guild.id), category):
+            embed = discord.Embed(
+                title="❌ Category Disabled",
+                description=f"The **{category}** category is currently disabled on this server.\n"
+                           f"Enable it first with `w.toggle-category {category} true`",
+                color=int(config.colors['error'].replace('#', ''), 16)
+            )
+            await ctx.send(embed=embed)
+            return
+    
+    # Confirmation for reset
+    class ConfirmResetView(discord.ui.View):
+        def __init__(self):
+            super().__init__(timeout=60)
+            
+        @discord.ui.button(label="✅ Confirm Reset", style=discord.ButtonStyle.danger)
+        async def confirm_reset(self, interaction: discord.Interaction, button: discord.ui.Button):
+            user_data = await database.get_user(str(target_user.id))
+            if not user_data:
+                user_data = {'user_id': str(target_user.id)}
+            
+            reset_categories = ['text', 'voice', 'role', 'overall'] if category == 'all' else [category]
+            
+            for cat in reset_categories:
+                user_data[f'{cat}_xp'] = 0
+            
+            success = await database.save_user(user_data)
+            
+            if success:
+                embed = discord.Embed(
+                    title="✅ XP Reset Complete",
+                    description=f"**{target_user.display_name}**'s XP has been reset.",
+                    color=int(config.colors['success'].replace('#', ''), 16)
+                )
+                
+                if category == 'all':
+                    embed.add_field(
+                        name="🔄 Reset Categories",
+                        value="All categories (Text, Voice, Role, Overall) reset to 0 XP",
+                        inline=False
+                    )
+                else:
+                    embed.add_field(
+                        name="🔄 Reset Category",
+                        value=f"**{category.title()}** category reset to 0 XP",
+                        inline=False
+                    )
+            else:
+                embed = discord.Embed(
+                    title="❌ Error",
+                    description="Failed to reset user XP. Please try again.",
+                    color=int(config.colors['error'].replace('#', ''), 16)
+                )
+            
+            await interaction.response.edit_message(embed=embed, view=None)
+            
+        @discord.ui.button(label="❌ Cancel", style=discord.ButtonStyle.secondary)
+        async def cancel_reset(self, interaction: discord.Interaction, button: discord.ui.Button):
+            embed = discord.Embed(
+                title="❌ Reset Cancelled",
+                description="XP reset has been cancelled.",
+                color=int(config.colors['warning'].replace('#', ''), 16)
+            )
+            await interaction.response.edit_message(embed=embed, view=None)
+    
+    embed = discord.Embed(
+        title="⚠️ Confirm XP Reset",
+        description=f"Are you sure you want to reset **{target_user.display_name}**'s XP?",
+        color=int(config.colors['warning'].replace('#', ''), 16)
+    )
+    
+    if category == 'all':
+        embed.add_field(
+            name="🔄 Reset Scope",
+            value="**ALL CATEGORIES** will be reset to 0 XP\n(Text, Voice, Role, Overall)",
+            inline=False
+        )
+    else:
+        embed.add_field(
+            name="🔄 Reset Scope",
+            value=f"**{category.title()}** category will be reset to 0 XP",
+            inline=False
+        )
+    
+    embed.add_field(
+        name="⚠️ Warning",
+        value="This action cannot be undone!",
+        inline=False
+    )
+    
+    view = ConfirmResetView()
+    await ctx.send(embed=embed, view=view)
+
+@commands.hybrid_command(name='set-user-currency')
+@commands.has_permissions(administrator=True)
+@app_commands.describe(user='User to modify (mention or ID)', amount='Currency amount to set')
+async def set_user_currency(ctx: commands.Context, user: str, amount: int):
+    """Set user's currency balance (Admin only)"""
+    target_user = parse_user_mention_or_id(user, ctx.guild)
+    if not target_user:
+        await send_command_error(ctx, "member_not_found", "set-user-currency", f"User '{user}' not found. Use mention (@user) or ID.")
+        return
+    
+    if amount < 0:
+        await send_command_error(ctx, "bad_argument", "set-user-currency", "Currency amount cannot be negative.")
+        return
+    
+    # Set user currency
+    user_data = await database.get_user(str(target_user.id))
+    if not user_data:
+        user_data = {'user_id': str(target_user.id)}
+    
+    old_balance = user_data.get('balance', 0)
+    user_data['balance'] = amount
+    
+    success = await database.save_user(user_data)
+    
+    if success:
+        embed = discord.Embed(
+            title="💰 Currency Updated",
+            description=f"**{target_user.display_name}**'s balance has been set.",
+            color=int(config.colors['success'].replace('#', ''), 16)
+        )
+        
+        embed.add_field(
+            name="💸 Changes",
+            value=f"**Old Balance:** {old_balance:,} {config.currency['symbol']}\n"
+                  f"**New Balance:** {amount:,} {config.currency['symbol']}\n"
+                  f"**Difference:** {amount - old_balance:+,} {config.currency['symbol']}",
+            inline=True
+        )
+    else:
+        embed = discord.Embed(
+            title="❌ Error",
+            description="Failed to update user currency. Please try again.",
+            color=int(config.colors['error'].replace('#', ''), 16)
+        )
+    
+    await ctx.send(embed=embed)
+
+@commands.hybrid_command(name='add-user-currency')
+@commands.has_permissions(administrator=True)
+@app_commands.describe(user='User to modify (mention or ID)', amount='Currency amount to add (use negative to subtract)')
+async def add_user_currency(ctx: commands.Context, user: str, amount: int):
+    """Add currency to user's balance (Admin only)"""
+    target_user = parse_user_mention_or_id(user, ctx.guild)
+    if not target_user:
+        await send_command_error(ctx, "member_not_found", "add-user-currency", f"User '{user}' not found. Use mention (@user) or ID.")
+        return
+    
+    # Add user currency
+    user_data = await database.get_user(str(target_user.id))
+    if not user_data:
+        user_data = {'user_id': str(target_user.id)}
+    
+    old_balance = user_data.get('balance', 0)
+    new_balance = max(0, old_balance + amount)  # Ensure balance doesn't go negative
+    user_data['balance'] = new_balance
+    
+    success = await database.save_user(user_data)
+    
+    if success:
+        embed = discord.Embed(
+            title="💰 Currency Modified",
+            description=f"**{target_user.display_name}**'s balance has been modified.",
+            color=int(config.colors['success'].replace('#', ''), 16)
+        )
+        
+        embed.add_field(
+            name="💸 Changes",
+            value=f"**Change:** {amount:+,} {config.currency['symbol']}\n"
+                  f"**Old Balance:** {old_balance:,} {config.currency['symbol']}\n"
+                  f"**New Balance:** {new_balance:,} {config.currency['symbol']}",
+            inline=True
+        )
+        
+        if amount > 0:
+            embed.add_field(
+                name="💰 Added",
+                value=f"Added {amount:,} {config.currency['symbol']}",
+                inline=True
+            )
+        elif amount < 0:
+            embed.add_field(
+                name="💸 Deducted",
+                value=f"Deducted {abs(amount):,} {config.currency['symbol']}",
+                inline=True
+            )
+    else:
+        embed = discord.Embed(
+            title="❌ Error",
+            description="Failed to modify user currency. Please try again.",
+            color=int(config.colors['error'].replace('#', ''), 16)
+        )
     
     await ctx.send(embed=embed)
 
@@ -625,9 +1381,9 @@ def parse_role_mentions(role_str: str, guild: discord.Guild) -> List[discord.Rol
     
     return roles
 
-@commands.group(name='giveaway', aliases=['ga'], invoke_without_command=True)
+@commands.hybrid_command(name='giveaway-info', aliases=['giveaway', 'ga'])
 @commands.has_permissions(manage_guild=True)
-async def giveaway_group(ctx: commands.Context):
+async def giveaway_info(ctx: commands.Context):
     """Advanced giveaway system - Use subcommands for specific actions"""
     embed = discord.Embed(
         title="🎉 Advanced Giveaway System",
@@ -684,9 +1440,10 @@ async def giveaway_group(ctx: commands.Context):
     
     await ctx.send(embed=embed)
 
-@giveaway_group.command(name='create', aliases=['c'])
+@commands.hybrid_command(name='giveaway-create', aliases=['giveaway-c'])
 @commands.has_permissions(manage_guild=True)
-async def giveaway_create(ctx: commands.Context, prize: str, duration: str, *args):
+@app_commands.describe(prize='Prize for the giveaway', duration='Duration (e.g., 1h, 2d, 1w)', options='Advanced options (comma-separated)')
+async def giveaway_create(ctx: commands.Context, prize: str, duration: str, options: str = None):
     """Create an advanced giveaway with comprehensive options
     
     Examples:
@@ -801,8 +1558,9 @@ async def giveaway_create(ctx: commands.Context, prize: str, duration: str, *arg
     
     await ctx.send(embed=embed)
 
-@giveaway_group.command(name='end', aliases=['stop'])
+@commands.hybrid_command(name='giveaway-end', aliases=['giveaway-stop'])
 @commands.has_permissions(manage_guild=True)
+@app_commands.describe(giveaway_id='ID of the giveaway to end')
 async def giveaway_end(ctx: commands.Context, giveaway_id: int):
     """Manually end an active giveaway
     
@@ -819,8 +1577,9 @@ async def giveaway_end(ctx: commands.Context, giveaway_id: int):
     
     await ctx.send(embed=embed)
 
-@giveaway_group.command(name='reroll', aliases=['r'])
+@commands.hybrid_command(name='giveaway-reroll', aliases=['giveaway-r'])
 @commands.has_permissions(manage_guild=True)
+@app_commands.describe(giveaway_id='ID of the giveaway to reroll', new_winner_count='New number of winners (optional)')
 async def giveaway_reroll(ctx: commands.Context, giveaway_id: int, new_winner_count: Optional[int] = None):
     """Reroll winners for a completed giveaway
     
@@ -841,8 +1600,9 @@ async def giveaway_reroll(ctx: commands.Context, giveaway_id: int, new_winner_co
     
     await ctx.send(embed=embed)
 
-@giveaway_group.command(name='list', aliases=['l'])
+@commands.hybrid_command(name='giveaway-list', aliases=['giveaway-l'])
 @commands.has_permissions(manage_guild=True)
+@app_commands.describe(show_all='Show all giveaways including completed ones (optional)')
 async def giveaway_list(ctx: commands.Context, show_all: Optional[str] = None):
     """List giveaways in this server
     
@@ -865,8 +1625,9 @@ async def giveaway_list(ctx: commands.Context, show_all: Optional[str] = None):
         await ctx.send(embed=embed)
 
 # Quick giveaway command for simple giveaways
-@commands.command(name='quickgiveaway', aliases=['qga'])
+@commands.hybrid_command(name='quickgiveaway', aliases=['qga'])
 @commands.has_permissions(manage_guild=True)
+@app_commands.describe(duration='Duration of the giveaway (e.g., 1h, 30m)', winners='Number of winners', prize='Prize description')
 async def quick_giveaway(ctx: commands.Context, duration: str, winners: int, *, prize: str):
     """Create a simple giveaway quickly
     
@@ -891,10 +1652,16 @@ async def quick_giveaway(ctx: commands.Context, duration: str, winners: int, *, 
 # Admin Commands (Hybrid: both prefix and slash)
 @commands.hybrid_command(name='adddrops')
 @commands.has_permissions(manage_guild=True)
-@app_commands.describe(channel='Channel to add to drop system (optional, defaults to current)')
-async def add_drop_channel(ctx: commands.Context, channel: discord.TextChannel = None):
+@app_commands.describe(channel='Channel to add to drop system (mention or ID - optional, defaults to current)')
+async def add_drop_channel(ctx: commands.Context, channel: str = None):
     """Add a channel to the wonder drop system (Admin only)"""
-    target_channel = channel or ctx.channel
+    if channel:
+        target_channel = parse_channel_mention_or_id(channel, ctx.guild)
+        if not target_channel:
+            await send_command_error(ctx, "channel_not_found", "adddrops", f"Channel '{channel}' not found. Use mention (#channel) or ID.")
+            return
+    else:
+        target_channel = ctx.channel
     
     result = await ctx.bot.drop_system.add_drop_channel(
         str(ctx.guild.id), str(target_channel.id), str(ctx.author.id)
@@ -912,10 +1679,16 @@ async def add_drop_channel(ctx: commands.Context, channel: discord.TextChannel =
 
 @commands.hybrid_command(name='removedrops')
 @commands.has_permissions(manage_guild=True)
-@app_commands.describe(channel='Channel to remove from drop system (optional, defaults to current)')
-async def remove_drop_channel(ctx: commands.Context, channel: discord.TextChannel = None):
+@app_commands.describe(channel='Channel to remove from drop system (mention or ID - optional, defaults to current)')
+async def remove_drop_channel(ctx: commands.Context, channel: str = None):
     """Remove a channel from the wonder drop system (Admin only)"""
-    target_channel = channel or ctx.channel
+    if channel:
+        target_channel = parse_channel_mention_or_id(channel, ctx.guild)
+        if not target_channel:
+            await send_command_error(ctx, "channel_not_found", "removedrops", f"Channel '{channel}' not found. Use mention (#channel) or ID.")
+            return
+    else:
+        target_channel = ctx.channel
     
     result = await ctx.bot.drop_system.remove_drop_channel(
         str(ctx.guild.id), str(target_channel.id)
@@ -955,9 +1728,10 @@ async def force_drop(ctx: commands.Context, amount: int = None, rarity: str = No
     embed.set_footer(text="Wonderkind • Where Wonder Meets Chrome Dreams")
     await ctx.send(embed=embed)
 
-@commands.command(name='configdrops')
+@commands.hybrid_command(name='configdrops')
 @commands.has_permissions(administrator=True)
-async def configure_drops(ctx: commands.Context, channel: discord.TextChannel, setting: str = None, value: str = None):
+@app_commands.describe(channel='Channel to configure (mention or ID)', setting='Setting to change (rarity_mult, amount_mult, frequency, rarities)', value='New value for the setting')
+async def configure_drops(ctx: commands.Context, channel: str, setting: str = None, value: str = None):
     """Configure advanced drop settings for a channel (Admin only)
     
     Settings:
@@ -966,18 +1740,23 @@ async def configure_drops(ctx: commands.Context, channel: discord.TextChannel, s
     - frequency: Drop frequency modifier (0.1-10.0)
     - rarities: Allowed rarities (comma separated: common,rare,epic,legendary)
     """
+    target_channel = parse_channel_mention_or_id(channel, ctx.guild)
+    if not target_channel:
+        await send_command_error(ctx, "channel_not_found", "configdrops", f"Channel '{channel}' not found. Use mention (#channel) or ID.")
+        return
+    
     if not setting:
         # Show current settings
         channels = await ctx.bot.drop_system.get_channel_list(str(ctx.guild.id))
-        target_channel = next((ch for ch in channels if ch['id'] == str(channel.id)), None)
+        channel_config = next((ch for ch in channels if ch['id'] == str(target_channel.id)), None)
         
         embed = discord.Embed(
-            title=f"🔮 Drop Settings for #{channel.name}",
+            title=f"🔮 Drop Settings for #{target_channel.name}",
             color=int(config.colors['info'].replace('#', ''), 16)
         )
         
-        if target_channel:
-            settings = target_channel['settings']
+        if channel_config:
+            settings = channel_config['settings']
             embed.add_field(name="🎲 Rarity Multiplier", value=f"{settings.get('custom_rarity_multiplier', 1.0):.1f}x", inline=True)
             embed.add_field(name="💰 Amount Multiplier", value=f"{settings.get('custom_amount_multiplier', 1.0):.1f}x", inline=True)
             embed.add_field(name="⏰ Frequency Modifier", value=f"{settings.get('drop_frequency_modifier', 1.0):.1f}x", inline=True)
@@ -1025,7 +1804,7 @@ async def configure_drops(ctx: commands.Context, channel: discord.TextChannel, s
             raise ValueError("Invalid setting. Use: rarity_mult, amount_mult, frequency, rarities")
         
         result = await ctx.bot.drop_system.configure_channel_drops(
-            str(ctx.guild.id), str(channel.id), new_settings
+            str(ctx.guild.id), str(target_channel.id), new_settings
         )
         
         embed = discord.Embed(
@@ -1043,7 +1822,7 @@ async def configure_drops(ctx: commands.Context, channel: discord.TextChannel, s
     
     await ctx.send(embed=embed)
 
-@commands.command(name='dropchannels')
+@commands.hybrid_command(name='dropchannels')
 @commands.has_permissions(manage_guild=True)
 async def list_drop_channels(ctx: commands.Context):
     """List all configured drop channels (Admin only)"""
@@ -1475,9 +2254,298 @@ async def intro_delete(interaction: discord.Interaction):
 @commands.hybrid_command(name='help')
 async def help_command(ctx: commands.Context):
     """Show comprehensive wonderkind help information"""
+    embed = await get_help_embed_for_user(ctx.author, ctx.bot)
+    await ctx.send(embed=embed)
+
+# =============================================================================
+# UTILITY FUNCTIONS
+# =============================================================================
+
+def is_admin(user: discord.Member) -> bool:
+    """Check if user has admin permissions"""
+    return user.guild_permissions.administrator or user.guild_permissions.manage_guild
+
+def is_owner(user: discord.Member, bot: commands.Bot) -> bool:
+    """Check if user is bot owner"""
+    return user.id == bot.owner_id
+
+def parse_user_mention_or_id(user_input: str, guild: discord.Guild) -> discord.Member:
+    """Parse user from mention or ID only"""
+    if not user_input:
+        return None
+    
+    # Try mention format <@!123> or <@123>
+    if user_input.startswith('<@') and user_input.endswith('>'):
+        user_id = user_input.replace('<@!', '').replace('<@', '').replace('>', '')
+        try:
+            return guild.get_member(int(user_id))
+        except ValueError:
+            return None
+    
+    # Try direct ID
+    try:
+        user_id = int(user_input)
+        return guild.get_member(user_id)
+    except ValueError:
+        return None
+    
+    return None
+
+def parse_role_mention_or_id(role_input: str, guild: discord.Guild) -> discord.Role:
+    """Parse role from mention or ID only"""
+    if not role_input:
+        return None
+    
+    # Try mention format <@&123>
+    if role_input.startswith('<@&') and role_input.endswith('>'):
+        role_id = role_input.replace('<@&', '').replace('>', '')
+        try:
+            return guild.get_role(int(role_id))
+        except ValueError:
+            return None
+    
+    # Try direct ID
+    try:
+        role_id = int(role_input)
+        return guild.get_role(role_id)
+    except ValueError:
+        return None
+    
+    return None
+
+def parse_channel_mention_or_id(channel_input: str, guild: discord.Guild) -> discord.TextChannel:
+    """Parse channel from mention or ID only"""
+    if not channel_input:
+        return None
+    
+    # Try mention format <#123>
+    if channel_input.startswith('<#') and channel_input.endswith('>'):
+        channel_id = channel_input.replace('<#', '').replace('>', '')
+        try:
+            return guild.get_channel(int(channel_id))
+        except ValueError:
+            return None
+    
+    # Try direct ID
+    try:
+        channel_id = int(channel_input)
+        return guild.get_channel(channel_id)
+    except ValueError:
+        return None
+    
+    return None
+
+def get_command_help(command_name: str) -> str:
+    """Get detailed help information for a specific command"""
+    command_info = {
+        'balance': {
+            'usage': '`w.balance [@user]` or `/balance [user]`',
+            'description': 'Check your balance or another user\'s balance',
+            'parameters': '• `user` (optional): User mention (@user) or ID to check balance for'
+        },
+        'daily': {
+            'usage': '`w.daily` or `/daily`',
+            'description': 'Claim your daily WonderCoins reward',
+            'parameters': '• No parameters required'
+        },
+        'work': {
+            'usage': '`w.work` or `/work`',
+            'description': 'Work to earn WonderCoins (1 hour cooldown)',
+            'parameters': '• No parameters required'
+        },
+        'shop': {
+            'usage': '`w.shop [category] [page]` or `/shop [category] [page]`',
+            'description': 'Browse the shop items',
+            'parameters': '• `category` (optional): Shop category to view (default: all)\n• `page` (optional): Page number (default: 1)'
+        },
+        'buy': {
+            'usage': '`w.buy <item_id> [quantity]` or `/buy <item_id> [quantity]`',
+            'description': 'Purchase an item from the shop',
+            'parameters': '• `item_id` (required): ID of the item to buy\n• `quantity` (optional): Number of items to buy (default: 1)'
+        },
+        'inventory': {
+            'usage': '`w.inventory [page]` or `/inventory [page]`',
+            'description': 'View your inventory',
+            'parameters': '• `page` (optional): Page number to view (default: 1)'
+        },
+        'use': {
+            'usage': '`w.use <item_id>` or `/use <item_id>`',
+            'description': 'Use an item from your inventory',
+            'parameters': '• `item_id` (required): ID of the item to use'
+        },
+        'rank': {
+            'usage': '`w.rank [@user]` or `/rank [user]`',
+            'description': 'View your or someone\'s rank and XP',
+            'parameters': '• `user` (optional): User mention (@user) or ID to check rank for'
+        },
+        'coinflip': {
+            'usage': '`w.coinflip <amount> <choice>` or `/coinflip <amount> <choice>`',
+            'description': 'Flip a coin and bet WonderCoins',
+            'parameters': '• `amount` (required): Amount to bet (10-1000 coins)\n• `choice` (required): h/heads or t/tails'
+        },
+        'dice': {
+            'usage': '`w.dice <amount> <target>` or `/dice <amount> <target>`',
+            'description': 'Roll dice and bet WonderCoins',
+            'parameters': '• `amount` (required): Amount to bet (10-500 coins)\n• `target` (required): Target number (1-6)'
+        },
+        'slots': {
+            'usage': '`w.slots <amount>` or `/slots <amount>`',
+            'description': 'Play slot machine with WonderCoins',
+            'parameters': '• `amount` (required): Amount to bet (20-200 coins)'
+        },
+        'gamestats': {
+            'usage': '`w.gamestats [@user]` or `/gamestats [user]`',
+            'description': 'View gambling statistics',
+            'parameters': '• `user` (optional): User mention (@user) or ID to check stats for'
+        },
+        'quickgiveaway': {
+            'usage': '`w.quickgiveaway <duration> <winners> <prize>` or `/quickgiveaway <duration> <winners> <prize>`',
+            'description': 'Create a quick giveaway (Admin only)',
+            'parameters': '• `duration` (required): Duration (e.g., 1h, 30m, 2d)\n• `winners` (required): Number of winners\n• `prize` (required): Prize description'
+        },
+        'adddrops': {
+            'usage': '`w.adddrops [#channel]` or `/adddrops [channel]`',
+            'description': 'Add a channel to the drop system (Admin only)',
+            'parameters': '• `channel` (optional): Channel mention (#channel) or ID (defaults to current)'
+        },
+        'removedrops': {
+            'usage': '`w.removedrops [#channel]` or `/removedrops [channel]`',
+            'description': 'Remove a channel from the drop system (Admin only)',
+            'parameters': '• `channel` (optional): Channel mention (#channel) or ID (defaults to current)'
+        },
+        'forcedrop': {
+            'usage': '`w.forcedrop [#channel]` or `/forcedrop [channel]`',
+            'description': 'Force a WonderCoins drop (Admin only)',
+            'parameters': '• `channel` (optional): Channel to drop in (defaults to current)'
+        },
+        'configdrops': {
+            'usage': '`w.configdrops <#channel> [setting] [value]` or `/configdrops <channel> [setting] [value]`',
+            'description': 'Configure drop settings for a channel (Admin only)',
+            'parameters': '• `channel` (required): Channel mention (#channel) or ID\n• `setting` (optional): rarity_mult, amount_mult, frequency, rarities\n• `value` (optional): New value for the setting'
+        },
+        'dropchannels': {
+            'usage': '`w.dropchannels` or `/dropchannels`',
+            'description': 'List all configured drop channels (Admin only)',
+            'parameters': '• No parameters required'
+        },
+        'roles': {
+            'usage': '`w.roles [category]` or `/roles [category]`',
+            'description': 'View level roles and requirements for each category',
+            'parameters': '• `category` (optional): text, voice, role, or overall'
+        },
+        'prestige': {
+            'usage': '`w.prestige` or `/prestige`',
+            'description': 'View prestige system information and requirements',
+            'parameters': '• No parameters required'
+        },
+        'toggle-category': {
+            'usage': '`w.toggle-category <category> <enabled>` or `/toggle-category <category> <enabled>`',
+            'description': 'Enable or disable a leveling category (Admin only)',
+            'parameters': '• `category` (required): text, voice, role, or overall\n• `enabled` (required): true or false'
+        },
+        'set-user-xp': {
+            'usage': '`w.set-user-xp <user> <category> <amount>` or `/set-user-xp <user> <category> <amount>`',
+            'description': 'Set user\'s XP in a specific category (Admin only)',
+            'parameters': '• `user` (required): User mention (@user) or ID\n• `category` (required): text, voice, role, or overall\n• `amount` (required): XP amount to set'
+        },
+        'add-user-xp': {
+            'usage': '`w.add-user-xp <user> <category> <amount>` or `/add-user-xp <user> <category> <amount>`',
+            'description': 'Add XP to user in a specific category (Admin only)',
+            'parameters': '• `user` (required): User mention (@user) or ID\n• `category` (required): text, voice, role, or overall\n• `amount` (required): XP amount to add (can be negative)'
+        },
+        'reset-user-xp': {
+            'usage': '`w.reset-user-xp <user> [category]` or `/reset-user-xp <user> [category]`',
+            'description': 'Reset user\'s XP in specific category or all categories (Admin only)',
+            'parameters': '• `user` (required): User mention (@user) or ID\n• `category` (optional): text, voice, role, overall, or all (default: all)'
+        },
+        'set-user-currency': {
+            'usage': '`w.set-user-currency <user> <amount>` or `/set-user-currency <user> <amount>`',
+            'description': 'Set user\'s currency balance (Admin only)',
+            'parameters': '• `user` (required): User mention (@user) or ID\n• `amount` (required): Currency amount to set'
+        },
+        'add-user-currency': {
+            'usage': '`w.add-user-currency <user> <amount>` or `/add-user-currency <user> <amount>`',
+            'description': 'Add currency to user\'s balance (Admin only)',
+            'parameters': '• `user` (required): User mention (@user) or ID\n• `amount` (required): Currency amount to add (can be negative)'
+        },
+        'help': {
+            'usage': '`w.help` or `/help`',
+            'description': 'Show this help information',
+            'parameters': '• No parameters required'
+        }
+    }
+    
+    return command_info.get(command_name, {
+        'usage': f'`w.{command_name}` or `/{command_name}`',
+        'description': 'Command information not available',
+        'parameters': '• Check command documentation'
+    })
+
+async def send_command_error(ctx: commands.Context, error_type: str, command_name: str, additional_info: str = ""):
+    """Send a detailed error message for command failures"""
+    cmd_info = get_command_help(command_name)
+    
+    embed = discord.Embed(
+        title="❌ Command Error",
+        color=int(config.colors['error'].replace('#', ''), 16)
+    )
+    
+    if error_type == "missing_argument":
+        embed.description = f"**Missing required argument for `{command_name}` command**"
+    elif error_type == "bad_argument":
+        embed.description = f"**Invalid argument provided for `{command_name}` command**"
+    elif error_type == "cooldown":
+        embed.description = f"**Command `{command_name}` is on cooldown**"
+    elif error_type == "permission":
+        embed.description = f"**You don't have permission to use `{command_name}` command**"
+    elif error_type == "bot_permission":
+        embed.description = f"**Bot missing permissions for `{command_name}` command**"
+    elif error_type == "no_dm":
+        embed.description = f"**Command `{command_name}` cannot be used in DMs**"
+    elif error_type == "channel_not_found":
+        embed.description = f"**Channel not found for `{command_name}` command**"
+    elif error_type == "member_not_found":
+        embed.description = f"**User not found for `{command_name}` command**"
+    elif error_type == "role_not_found":
+        embed.description = f"**Role not found for `{command_name}` command**"
+    elif error_type == "unexpected":
+        embed.description = f"**Unexpected error in `{command_name}` command**"
+    else:
+        embed.description = f"**Error executing `{command_name}` command**"
+    
+    if additional_info:
+        embed.description += f"\n{additional_info}"
+    
+    embed.add_field(
+        name="📝 Usage",
+        value=cmd_info['usage'],
+        inline=False
+    )
+    
+    embed.add_field(
+        name="📋 Description", 
+        value=cmd_info['description'],
+        inline=False
+    )
+    
+    embed.add_field(
+        name="⚙️ Parameters",
+        value=cmd_info['parameters'],
+        inline=False
+    )
+    
+    embed.set_footer(text="💡 Use /help for a complete list of commands")
+    
+    await ctx.send(embed=embed)
+
+async def get_help_embed_for_user(user: discord.Member, bot: commands.Bot) -> discord.Embed:
+    """Get appropriate help embed based on user permissions"""
+    is_user_admin = is_admin(user)
+    is_user_owner = is_owner(user, bot)
+    
     embed = discord.Embed(
         title=f"🌌 {config.branding['name']} - Wonder Help",
-        description=f"✨ {config.branding['tagline']} ✨\n*Where Wonder Meets Chrome Dreams*",
+        description=f"*Where Wonder Meets Chrome Dreams*",
         color=int(config.colors['primary'].replace('#', ''), 16)
     )
     
@@ -1512,11 +2580,12 @@ async def help_command(ctx: commands.Context):
     )
     
     embed.add_field(
-        name="🎯 Leveling System",
-        value="**4-Category Progression:**\n"
-              "`w.rank [@user]` - View XP & levels\n"
-              "**Gain XP by:** Chatting (Text), Voice time,\n"
-              "Special activities (Role), Combined (Overall)",
+        name="🎯 Comprehensive Leveling System",
+        value="**4-Category Progression with Roles:**\n"
+              "`w.rank [@user]` - View comprehensive rank\n"
+              "`w.roles [category]` - View level roles & perks\n"
+              "`w.prestige` - View prestige system info\n"
+              "**Categories:** Text, Voice, Community, Overall",
         inline=True
     )
     
@@ -1531,13 +2600,18 @@ async def help_command(ctx: commands.Context):
         inline=True
     )
     
+    giveaway_commands = "**Community Events:**\n" \
+                       "`w.giveaway-create` `/giveaway-create` - Advanced giveaway\n" \
+                       "`w.giveaway-list` `/giveaway-list` - View active\n"
+    
+    if is_user_admin:
+        giveaway_commands += "`w.quickgiveaway` `/quickgiveaway` - Quick setup (Admin)\n" \
+                           "`w.giveaway-end` `/giveaway-end` - End giveaway (Admin)\n" \
+                           "`w.giveaway-reroll` `/giveaway-reroll` - Reroll (Admin)"
+    
     embed.add_field(
         name="🎉 Giveaway System",
-        value="**Community Events:**\n"
-              "`w.giveaway create` - Advanced giveaway\n"
-              "`w.quickgiveaway` - Quick setup\n"
-              "`w.giveaway list` - View active\n"
-              "`w.giveaway end/reroll` - Manage (Admin)",
+        value=giveaway_commands,
         inline=True
     )
     
@@ -1551,24 +2625,40 @@ async def help_command(ctx: commands.Context):
         inline=True
     )
     
-    embed.add_field(
-        name="🛡️ Admin Commands",
-        value="**Server Management:**\n"
-              "`/adddrops` `w.adddrops` - Add drop channel\n"
-              "`/removedrops` `w.removedrops` - Remove channel\n"
-              "`w.dropchannels` - List channels\n"
-              "`w.configdrops` - Configure settings\n"
-              "`/forcedrop` `w.forcedrop` - Force drop",
-        inline=True
-    )
+    # Add admin commands only for admins
+    if is_user_admin:
+        embed.add_field(
+            name="🛡️ Admin Drop Commands",
+            value="**Drop System Management:**\n"
+                  "`/adddrops` `w.adddrops` - Add drop channel\n"
+                  "`/removedrops` `w.removedrops` - Remove channel\n"
+                  "`w.dropchannels` - List channels\n"
+                  "`w.configdrops` - Configure settings\n"
+                  "`/forcedrop` `w.forcedrop` - Force drop",
+            inline=True
+        )
+        
+        embed.add_field(
+            name="⚙️ Admin Leveling Commands",
+            value="**Leveling System Management:**\n"
+                  "`w.toggle-category` - Enable/disable categories\n"
+                  "`w.set-user-xp` - Set user XP\n"
+                  "`w.add-user-xp` - Add/remove user XP\n"
+                  "`w.reset-user-xp` - Reset user XP\n"
+                  "`w.set-user-currency` - Set user balance\n"
+                  "`w.add-user-currency` - Add/remove currency",
+            inline=True
+        )
     
-    embed.add_field(
-        name="🔒 Owner Commands",
-        value="**Bot Owner Only:**\n"
-              "`/intro-background` - Custom card backgrounds\n"
-              "Upload images to customize server cards",
-        inline=True
-    )
+    # Add owner commands only for owner
+    if is_user_owner:
+        embed.add_field(
+            name="🔒 Owner Commands",
+            value="**Bot Owner Only:**\n"
+                  "`/intro-background` - Custom card backgrounds\n"
+                  "Upload images to customize server cards",
+            inline=True
+        )
     
     embed.add_field(
         name="✨ Command Support",
@@ -1589,7 +2679,7 @@ async def help_command(ctx: commands.Context):
     embed.set_footer(text=f"Wonder Bot v{config.branding['version']} • Where Wonder Meets Chrome Dreams • Use /help for this menu")
     embed.timestamp = datetime.now()
     
-    await ctx.send(embed=embed)
+    return embed
 
 async def main():
     """Main function to run the bot"""
@@ -1626,13 +2716,29 @@ async def main():
     
     # Leveling commands
     bot.add_command(rank)
+    bot.add_command(level_roles)
+    bot.add_command(prestige_info)
+    
+    # Admin leveling management commands
+    bot.add_command(toggle_category)
+    bot.add_command(set_user_xp)
+    bot.add_command(add_user_xp)
+    bot.add_command(reset_user_xp)
+    bot.add_command(set_user_currency)
+    bot.add_command(add_user_currency)
     
     # Admin commands
-    bot.add_command(giveaway_group)
+    bot.add_command(giveaway_info)
+    bot.add_command(giveaway_create)
+    bot.add_command(giveaway_end)
+    bot.add_command(giveaway_reroll)
+    bot.add_command(giveaway_list)
     bot.add_command(quick_giveaway)
     bot.add_command(add_drop_channel)
     bot.add_command(remove_drop_channel)
     bot.add_command(force_drop)
+    bot.add_command(configure_drops)
+    bot.add_command(drop_channels)
     
     # Help command
     bot.add_command(help_command)
