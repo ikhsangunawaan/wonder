@@ -45,8 +45,12 @@ class WonderBot(commands.Bot):
         intents.reactions = True
         intents.voice_states = True
         
+        # Support multiple prefixes
+        def get_prefix(bot, message):
+            return ['w.', '/']
+        
         super().__init__(
-            command_prefix=config.prefix,
+            command_prefix=get_prefix,
             intents=intents,
             help_command=None,
             case_insensitive=True
@@ -494,7 +498,8 @@ async def slots(ctx: commands.Context, bet_amount: int):
     # Animation message is already updated in the game method
     # No need to send another message if animation was shown
 
-@commands.command(name='gamestats')
+@commands.hybrid_command(name='gamestats')
+@app_commands.describe(user='User to check gambling stats for (optional)')
 async def gamestats(ctx: commands.Context, user: discord.Member = None):
     """View gambling statistics"""
     target_user = user or ctx.author
@@ -502,13 +507,15 @@ async def gamestats(ctx: commands.Context, user: discord.Member = None):
     await ctx.send(embed=embed)
 
 # Shop Commands
-@commands.command(name='shop')
+@commands.hybrid_command(name='shop')
+@app_commands.describe(category='Shop category to view', page='Page number')
 async def shop(ctx: commands.Context, category: str = 'all', page: int = 1):
     """View the shop"""
     embed = await ctx.bot.shop_system.get_shop_embed(category, page)
     await ctx.send(embed=embed)
 
-@commands.command(name='buy')
+@commands.hybrid_command(name='buy')
+@app_commands.describe(item_id='ID of the item to buy', quantity='Number of items to buy')
 async def buy(ctx: commands.Context, item_id: str, quantity: int = 1):
     """Buy an item from the shop"""
     result = await ctx.bot.shop_system.purchase_item(str(ctx.author.id), item_id, quantity)
@@ -524,13 +531,15 @@ async def buy(ctx: commands.Context, item_id: str, quantity: int = 1):
     
     await ctx.send(embed=embed)
 
-@commands.command(name='inventory', aliases=['inv'])
+@commands.hybrid_command(name='inventory', aliases=['inv'])
+@app_commands.describe(page='Page number of inventory to view')
 async def inventory(ctx: commands.Context, page: int = 1):
     """View your inventory"""
     embed = await ctx.bot.shop_system.get_inventory_embed(str(ctx.author.id), page)
     await ctx.send(embed=embed)
 
-@commands.command(name='use')
+@commands.hybrid_command(name='use')
+@app_commands.describe(item_id='ID of the item to use')
 async def use_item(ctx: commands.Context, item_id: str):
     """Use an item from inventory"""
     result = await ctx.bot.shop_system.use_item(str(ctx.author.id), item_id)
@@ -544,7 +553,8 @@ async def use_item(ctx: commands.Context, item_id: str):
     await ctx.send(embed=embed)
 
 # Leveling Commands
-@commands.command(name='rank')
+@commands.hybrid_command(name='rank')
+@app_commands.describe(user='User to check rank for (optional)')
 async def rank(ctx: commands.Context, user: discord.Member = None):
     """View your or someone's rank"""
     target_user = user or ctx.author
@@ -865,8 +875,9 @@ async def giveaway_list(ctx: commands.Context, show_all: Optional[str] = None):
         await ctx.send(embed=embed)
 
 # Quick giveaway command for simple giveaways
-@commands.command(name='quickgiveaway', aliases=['qga'])
+@commands.hybrid_command(name='quickgiveaway', aliases=['qga'])
 @commands.has_permissions(manage_guild=True)
+@app_commands.describe(duration='Duration of the giveaway (e.g., 1h, 30m)', winners='Number of winners', prize='Prize description')
 async def quick_giveaway(ctx: commands.Context, duration: str, winners: int, *, prize: str):
     """Create a simple giveaway quickly
     
@@ -955,8 +966,9 @@ async def force_drop(ctx: commands.Context, amount: int = None, rarity: str = No
     embed.set_footer(text="Wonderkind • Where Wonder Meets Chrome Dreams")
     await ctx.send(embed=embed)
 
-@commands.command(name='configdrops')
+@commands.hybrid_command(name='configdrops')
 @commands.has_permissions(administrator=True)
+@app_commands.describe(channel='Channel to configure', setting='Setting to change (rarity_mult, amount_mult, frequency, rarities)', value='New value for the setting')
 async def configure_drops(ctx: commands.Context, channel: discord.TextChannel, setting: str = None, value: str = None):
     """Configure advanced drop settings for a channel (Admin only)
     
@@ -1043,7 +1055,7 @@ async def configure_drops(ctx: commands.Context, channel: discord.TextChannel, s
     
     await ctx.send(embed=embed)
 
-@commands.command(name='dropchannels')
+@commands.hybrid_command(name='dropchannels')
 @commands.has_permissions(manage_guild=True)
 async def list_drop_channels(ctx: commands.Context):
     """List all configured drop channels (Admin only)"""
@@ -1475,6 +1487,26 @@ async def intro_delete(interaction: discord.Interaction):
 @commands.hybrid_command(name='help')
 async def help_command(ctx: commands.Context):
     """Show comprehensive wonderkind help information"""
+    embed = await get_help_embed_for_user(ctx.author, ctx.bot)
+    await ctx.send(embed=embed)
+
+# =============================================================================
+# UTILITY FUNCTIONS
+# =============================================================================
+
+def is_admin(user: discord.Member) -> bool:
+    """Check if user has admin permissions"""
+    return user.guild_permissions.administrator or user.guild_permissions.manage_guild
+
+def is_owner(user: discord.Member, bot: commands.Bot) -> bool:
+    """Check if user is bot owner"""
+    return user.id == bot.owner_id
+
+async def get_help_embed_for_user(user: discord.Member, bot: commands.Bot) -> discord.Embed:
+    """Get appropriate help embed based on user permissions"""
+    is_user_admin = is_admin(user)
+    is_user_owner = is_owner(user, bot)
+    
     embed = discord.Embed(
         title=f"🌌 {config.branding['name']} - Wonder Help",
         description=f"✨ {config.branding['tagline']} ✨\n*Where Wonder Meets Chrome Dreams*",
@@ -1531,13 +1563,17 @@ async def help_command(ctx: commands.Context):
         inline=True
     )
     
+    giveaway_commands = "**Community Events:**\n" \
+                       "`w.giveaway create` - Advanced giveaway\n" \
+                       "`w.giveaway list` - View active\n"
+    
+    if is_user_admin:
+        giveaway_commands += "`w.quickgiveaway` - Quick setup (Admin)\n" \
+                           "`w.giveaway end/reroll` - Manage (Admin)"
+    
     embed.add_field(
         name="🎉 Giveaway System",
-        value="**Community Events:**\n"
-              "`w.giveaway create` - Advanced giveaway\n"
-              "`w.quickgiveaway` - Quick setup\n"
-              "`w.giveaway list` - View active\n"
-              "`w.giveaway end/reroll` - Manage (Admin)",
+        value=giveaway_commands,
         inline=True
     )
     
@@ -1551,24 +1587,28 @@ async def help_command(ctx: commands.Context):
         inline=True
     )
     
-    embed.add_field(
-        name="🛡️ Admin Commands",
-        value="**Server Management:**\n"
-              "`/adddrops` `w.adddrops` - Add drop channel\n"
-              "`/removedrops` `w.removedrops` - Remove channel\n"
-              "`w.dropchannels` - List channels\n"
-              "`w.configdrops` - Configure settings\n"
-              "`/forcedrop` `w.forcedrop` - Force drop",
-        inline=True
-    )
+    # Add admin commands only for admins
+    if is_user_admin:
+        embed.add_field(
+            name="🛡️ Admin Commands",
+            value="**Server Management:**\n"
+                  "`/adddrops` `w.adddrops` - Add drop channel\n"
+                  "`/removedrops` `w.removedrops` - Remove channel\n"
+                  "`w.dropchannels` - List channels\n"
+                  "`w.configdrops` - Configure settings\n"
+                  "`/forcedrop` `w.forcedrop` - Force drop",
+            inline=True
+        )
     
-    embed.add_field(
-        name="🔒 Owner Commands",
-        value="**Bot Owner Only:**\n"
-              "`/intro-background` - Custom card backgrounds\n"
-              "Upload images to customize server cards",
-        inline=True
-    )
+    # Add owner commands only for owner
+    if is_user_owner:
+        embed.add_field(
+            name="🔒 Owner Commands",
+            value="**Bot Owner Only:**\n"
+                  "`/intro-background` - Custom card backgrounds\n"
+                  "Upload images to customize server cards",
+            inline=True
+        )
     
     embed.add_field(
         name="✨ Command Support",
@@ -1589,7 +1629,7 @@ async def help_command(ctx: commands.Context):
     embed.set_footer(text=f"Wonder Bot v{config.branding['version']} • Where Wonder Meets Chrome Dreams • Use /help for this menu")
     embed.timestamp = datetime.now()
     
-    await ctx.send(embed=embed)
+    return embed
 
 async def main():
     """Main function to run the bot"""
