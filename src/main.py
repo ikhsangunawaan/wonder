@@ -155,24 +155,64 @@ class WonderBot(commands.Bot):
         # await self.handle_welcome(member)
     
     async def on_command_error(self, ctx: commands.Context, error: Exception):
-        """Handle command errors"""
+        """Handle command errors with detailed information"""
         if isinstance(error, commands.CommandNotFound):
             return
         
+        command_name = ctx.command.name if ctx.command else "unknown"
+        
         if isinstance(error, commands.MissingRequiredArgument):
-            await ctx.send(f"❌ Missing required argument: `{error.param.name}`")
+            additional_info = f"Missing parameter: `{error.param.name}`"
+            await send_command_error(ctx, "missing_argument", command_name, additional_info)
             return
         
         if isinstance(error, commands.BadArgument):
-            await ctx.send(f"❌ Invalid argument provided")
+            additional_info = f"Please check your input format and try again."
+            await send_command_error(ctx, "bad_argument", command_name, additional_info)
             return
         
         if isinstance(error, commands.CommandOnCooldown):
-            await ctx.send(f"❌ Command is on cooldown. Try again in {error.retry_after:.2f} seconds")
+            cooldown_time = f"{error.retry_after:.1f} seconds" if error.retry_after < 60 else f"{error.retry_after/60:.1f} minutes"
+            additional_info = f"Try again in {cooldown_time}"
+            await send_command_error(ctx, "cooldown", command_name, additional_info)
             return
         
-        logging.error(f"Command error: {error}")
-        await ctx.send("❌ An error occurred while executing the command!")
+        if isinstance(error, commands.MissingPermissions):
+            required_perms = ", ".join(error.missing_permissions)
+            additional_info = f"Required permissions: {required_perms}"
+            await send_command_error(ctx, "permission", command_name, additional_info)
+            return
+        
+        if isinstance(error, commands.BotMissingPermissions):
+            missing_perms = ", ".join(error.missing_permissions)
+            additional_info = f"Bot is missing permissions: {missing_perms}"
+            await send_command_error(ctx, "bot_permission", command_name, additional_info)
+            return
+        
+        if isinstance(error, commands.NoPrivateMessage):
+            additional_info = "This command can only be used in servers, not in DMs."
+            await send_command_error(ctx, "no_dm", command_name, additional_info)
+            return
+        
+        if isinstance(error, commands.ChannelNotFound):
+            additional_info = "The specified channel could not be found."
+            await send_command_error(ctx, "channel_not_found", command_name, additional_info)
+            return
+        
+        if isinstance(error, commands.MemberNotFound):
+            additional_info = "The specified user could not be found."
+            await send_command_error(ctx, "member_not_found", command_name, additional_info)
+            return
+        
+        if isinstance(error, commands.RoleNotFound):
+            additional_info = "The specified role could not be found."
+            await send_command_error(ctx, "role_not_found", command_name, additional_info)
+            return
+        
+        # Log unexpected errors
+        logging.error(f"Command error in {command_name}: {error}")
+        additional_info = f"Unexpected error occurred. Please try again or contact support."
+        await send_command_error(ctx, "unexpected", command_name, additional_info)
     
     async def on_reaction_add(self, reaction: discord.Reaction, user: discord.User):
         """Handle reaction additions"""
@@ -442,6 +482,25 @@ async def leaderboard(ctx: commands.Context):
 )
 async def coinflip(ctx: commands.Context, bet_amount: int, choice: str):
     """Play animated wonder coinflip game"""
+    # Validate bet amount
+    min_bet = config.games['coinflip']['minBet']
+    max_bet = config.games['coinflip']['maxBet']
+    
+    if bet_amount < min_bet or bet_amount > max_bet:
+        await send_command_error(
+            ctx, "bad_argument", "coinflip", 
+            f"Bet amount must be between {min_bet} and {max_bet} WonderCoins."
+        )
+        return
+    
+    # Validate choice
+    if choice.lower() not in ['h', 'heads', 't', 'tails']:
+        await send_command_error(
+            ctx, "bad_argument", "coinflip", 
+            f"Choice must be 'h', 'heads', 't', or 'tails'."
+        )
+        return
+    
     result = await ctx.bot.games_system.coinflip(str(ctx.author.id), bet_amount, choice, ctx)
     
     if not result['success']:
@@ -464,6 +523,25 @@ async def coinflip(ctx: commands.Context, bet_amount: int, choice: str):
 )
 async def dice(ctx: commands.Context, bet_amount: int, target: int):
     """Play animated wonder dice game"""
+    # Validate bet amount
+    min_bet = config.games['dice']['minBet']
+    max_bet = config.games['dice']['maxBet']
+    
+    if bet_amount < min_bet or bet_amount > max_bet:
+        await send_command_error(
+            ctx, "bad_argument", "dice", 
+            f"Bet amount must be between {min_bet} and {max_bet} WonderCoins."
+        )
+        return
+    
+    # Validate target number
+    if target < 1 or target > 6:
+        await send_command_error(
+            ctx, "bad_argument", "dice", 
+            f"Target number must be between 1 and 6."
+        )
+        return
+    
     result = await ctx.bot.games_system.dice(str(ctx.author.id), bet_amount, target, ctx)
     
     if not result['success']:
@@ -483,6 +561,17 @@ async def dice(ctx: commands.Context, bet_amount: int, target: int):
 @app_commands.describe(bet_amount='Amount of WonderCoins to bet')
 async def slots(ctx: commands.Context, bet_amount: int):
     """Play animated wonder slot machine"""
+    # Validate bet amount
+    min_bet = config.games['slots']['minBet']
+    max_bet = config.games['slots']['maxBet']
+    
+    if bet_amount < min_bet or bet_amount > max_bet:
+        await send_command_error(
+            ctx, "bad_argument", "slots", 
+            f"Bet amount must be between {min_bet} and {max_bet} WonderCoins."
+        )
+        return
+    
     result = await ctx.bot.games_system.slots(str(ctx.author.id), bet_amount, ctx)
     
     if not result['success']:
@@ -1502,6 +1591,169 @@ def is_owner(user: discord.Member, bot: commands.Bot) -> bool:
     """Check if user is bot owner"""
     return user.id == bot.owner_id
 
+def get_command_help(command_name: str) -> str:
+    """Get detailed help information for a specific command"""
+    command_info = {
+        'balance': {
+            'usage': '`w.balance [@user]` or `/balance [user]`',
+            'description': 'Check your balance or another user\'s balance',
+            'parameters': '• `user` (optional): User to check balance for'
+        },
+        'daily': {
+            'usage': '`w.daily` or `/daily`',
+            'description': 'Claim your daily WonderCoins reward',
+            'parameters': '• No parameters required'
+        },
+        'work': {
+            'usage': '`w.work` or `/work`',
+            'description': 'Work to earn WonderCoins (1 hour cooldown)',
+            'parameters': '• No parameters required'
+        },
+        'shop': {
+            'usage': '`w.shop [category] [page]` or `/shop [category] [page]`',
+            'description': 'Browse the shop items',
+            'parameters': '• `category` (optional): Shop category to view (default: all)\n• `page` (optional): Page number (default: 1)'
+        },
+        'buy': {
+            'usage': '`w.buy <item_id> [quantity]` or `/buy <item_id> [quantity]`',
+            'description': 'Purchase an item from the shop',
+            'parameters': '• `item_id` (required): ID of the item to buy\n• `quantity` (optional): Number of items to buy (default: 1)'
+        },
+        'inventory': {
+            'usage': '`w.inventory [page]` or `/inventory [page]`',
+            'description': 'View your inventory',
+            'parameters': '• `page` (optional): Page number to view (default: 1)'
+        },
+        'use': {
+            'usage': '`w.use <item_id>` or `/use <item_id>`',
+            'description': 'Use an item from your inventory',
+            'parameters': '• `item_id` (required): ID of the item to use'
+        },
+        'rank': {
+            'usage': '`w.rank [@user]` or `/rank [user]`',
+            'description': 'View your or someone\'s rank and XP',
+            'parameters': '• `user` (optional): User to check rank for'
+        },
+        'coinflip': {
+            'usage': '`w.coinflip <amount> <choice>` or `/coinflip <amount> <choice>`',
+            'description': 'Flip a coin and bet WonderCoins',
+            'parameters': '• `amount` (required): Amount to bet (10-1000 coins)\n• `choice` (required): h/heads or t/tails'
+        },
+        'dice': {
+            'usage': '`w.dice <amount> <target>` or `/dice <amount> <target>`',
+            'description': 'Roll dice and bet WonderCoins',
+            'parameters': '• `amount` (required): Amount to bet (10-500 coins)\n• `target` (required): Target number (1-6)'
+        },
+        'slots': {
+            'usage': '`w.slots <amount>` or `/slots <amount>`',
+            'description': 'Play slot machine with WonderCoins',
+            'parameters': '• `amount` (required): Amount to bet (20-200 coins)'
+        },
+        'gamestats': {
+            'usage': '`w.gamestats [@user]` or `/gamestats [user]`',
+            'description': 'View gambling statistics',
+            'parameters': '• `user` (optional): User to check stats for'
+        },
+        'quickgiveaway': {
+            'usage': '`w.quickgiveaway <duration> <winners> <prize>` or `/quickgiveaway <duration> <winners> <prize>`',
+            'description': 'Create a quick giveaway (Admin only)',
+            'parameters': '• `duration` (required): Duration (e.g., 1h, 30m, 2d)\n• `winners` (required): Number of winners\n• `prize` (required): Prize description'
+        },
+        'adddrops': {
+            'usage': '`w.adddrops [#channel]` or `/adddrops [channel]`',
+            'description': 'Add a channel to the drop system (Admin only)',
+            'parameters': '• `channel` (optional): Channel to add (defaults to current)'
+        },
+        'removedrops': {
+            'usage': '`w.removedrops [#channel]` or `/removedrops [channel]`',
+            'description': 'Remove a channel from the drop system (Admin only)',
+            'parameters': '• `channel` (optional): Channel to remove (defaults to current)'
+        },
+        'forcedrop': {
+            'usage': '`w.forcedrop [#channel]` or `/forcedrop [channel]`',
+            'description': 'Force a WonderCoins drop (Admin only)',
+            'parameters': '• `channel` (optional): Channel to drop in (defaults to current)'
+        },
+        'configdrops': {
+            'usage': '`w.configdrops <#channel> [setting] [value]` or `/configdrops <channel> [setting] [value]`',
+            'description': 'Configure drop settings for a channel (Admin only)',
+            'parameters': '• `channel` (required): Channel to configure\n• `setting` (optional): rarity_mult, amount_mult, frequency, rarities\n• `value` (optional): New value for the setting'
+        },
+        'dropchannels': {
+            'usage': '`w.dropchannels` or `/dropchannels`',
+            'description': 'List all configured drop channels (Admin only)',
+            'parameters': '• No parameters required'
+        },
+        'help': {
+            'usage': '`w.help` or `/help`',
+            'description': 'Show this help information',
+            'parameters': '• No parameters required'
+        }
+    }
+    
+    return command_info.get(command_name, {
+        'usage': f'`w.{command_name}` or `/{command_name}`',
+        'description': 'Command information not available',
+        'parameters': '• Check command documentation'
+    })
+
+async def send_command_error(ctx: commands.Context, error_type: str, command_name: str, additional_info: str = ""):
+    """Send a detailed error message for command failures"""
+    cmd_info = get_command_help(command_name)
+    
+    embed = discord.Embed(
+        title="❌ Command Error",
+        color=int(config.colors['error'].replace('#', ''), 16)
+    )
+    
+    if error_type == "missing_argument":
+        embed.description = f"**Missing required argument for `{command_name}` command**"
+    elif error_type == "bad_argument":
+        embed.description = f"**Invalid argument provided for `{command_name}` command**"
+    elif error_type == "cooldown":
+        embed.description = f"**Command `{command_name}` is on cooldown**"
+    elif error_type == "permission":
+        embed.description = f"**You don't have permission to use `{command_name}` command**"
+    elif error_type == "bot_permission":
+        embed.description = f"**Bot missing permissions for `{command_name}` command**"
+    elif error_type == "no_dm":
+        embed.description = f"**Command `{command_name}` cannot be used in DMs**"
+    elif error_type == "channel_not_found":
+        embed.description = f"**Channel not found for `{command_name}` command**"
+    elif error_type == "member_not_found":
+        embed.description = f"**User not found for `{command_name}` command**"
+    elif error_type == "role_not_found":
+        embed.description = f"**Role not found for `{command_name}` command**"
+    elif error_type == "unexpected":
+        embed.description = f"**Unexpected error in `{command_name}` command**"
+    else:
+        embed.description = f"**Error executing `{command_name}` command**"
+    
+    if additional_info:
+        embed.description += f"\n{additional_info}"
+    
+    embed.add_field(
+        name="📝 Usage",
+        value=cmd_info['usage'],
+        inline=False
+    )
+    
+    embed.add_field(
+        name="📋 Description", 
+        value=cmd_info['description'],
+        inline=False
+    )
+    
+    embed.add_field(
+        name="⚙️ Parameters",
+        value=cmd_info['parameters'],
+        inline=False
+    )
+    
+    embed.set_footer(text="💡 Use /help for a complete list of commands")
+    
+    await ctx.send(embed=embed)
+
 async def get_help_embed_for_user(user: discord.Member, bot: commands.Bot) -> discord.Embed:
     """Get appropriate help embed based on user permissions"""
     is_user_admin = is_admin(user)
@@ -1509,7 +1761,7 @@ async def get_help_embed_for_user(user: discord.Member, bot: commands.Bot) -> di
     
     embed = discord.Embed(
         title=f"🌌 {config.branding['name']} - Wonder Help",
-        description=f"✨ {config.branding['tagline']} ✨\n*Where Wonder Meets Chrome Dreams*",
+        description=f"🐍 **Programming Language:** Python {sys.version.split()[0]}\n*Where Wonder Meets Chrome Dreams*",
         color=int(config.colors['primary'].replace('#', ''), 16)
     )
     
