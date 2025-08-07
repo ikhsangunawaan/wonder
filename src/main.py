@@ -101,13 +101,6 @@ class WonderBot(commands.Bot):
             logging.error(f"Failed to sync slash commands: {e}")
         
         logging.info("All systems initialized")
-        
-        # Sync commands
-        try:
-            synced = await self.tree.sync()
-            logging.info(f"Synced {len(synced)} command(s)")
-        except Exception as e:
-            logging.error(f"Failed to sync commands: {e}")
     
     async def on_ready(self):
         """Called when bot is ready"""
