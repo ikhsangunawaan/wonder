@@ -2738,7 +2738,7 @@ async def main():
     bot.add_command(remove_drop_channel)
     bot.add_command(force_drop)
     bot.add_command(configure_drops)
-    bot.add_command(drop_channels)
+    bot.add_command(list_drop_channels)
     
     # Help command
     bot.add_command(help_command)
