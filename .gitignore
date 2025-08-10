@@ -1,0 +1,39 @@
+# 🤖 Wonder Bot - Simple .gitignore
+# File-file yang gak perlu di-upload ke Git
+
+# Bot files
+*.log
+bot.log
+*.db
+*.sqlite
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment
+.env
+*.env
+
+# Config dengan token (JANGAN UPLOAD!)
+config_with_token.json
+
+# Temporary files
+*.tmp
+*.temp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Backup files
+*.bak
+*.backup
