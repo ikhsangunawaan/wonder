@@ -1,7 +1,0 @@
-2025-08-06 14:18:08,608:WARNING:discord.client: PyNaCl is not installed, voice will NOT be supported
-2025-08-06 14:18:08,608:INFO:discord.client: logging in using static token
-2025-08-06 14:18:08,853:ERROR:root: Bot error: Improper token has been passed.
-2025-08-06 14:18:21,315:INFO:discord.client: logging in using static token
-2025-08-06 14:18:21,487:ERROR:root: Bot error: Improper token has been passed.
-2025-08-07 09:44:22,644:INFO:discord.client: logging in using static token
-2025-08-07 09:44:22,855:ERROR:root: Bot error: Improper token has been passed.
