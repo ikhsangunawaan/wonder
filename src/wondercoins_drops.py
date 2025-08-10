@@ -92,12 +92,10 @@ class WonderCoinsDropSystem:
     async def initialize_drop_channels(self):
         """Load drop channels and their settings from database"""
         try:
-            async with database.db_path as db_path:
-                import aiosqlite
-                async with aiosqlite.connect(db_path) as db:
-                    db.row_factory = aiosqlite.Row
-                    async with db.execute('SELECT * FROM drop_channels') as cursor:
-                        channels = await cursor.fetchall()
+            async with await database._get_connection() as db:
+                db.row_factory = aiosqlite.Row
+                async with db.execute('SELECT * FROM drop_channels') as cursor:
+                    channels = await cursor.fetchall()
             
             for channel_row in channels:
                 guild_id = channel_row['guild_id']
@@ -125,28 +123,24 @@ class WonderCoinsDropSystem:
         """Add a channel with advanced configuration options"""
         try:
             # Check if channel already exists
-            async with database.db_path as db_path:
-                import aiosqlite
-                async with aiosqlite.connect(db_path) as db:
-                    async with db.execute(
-                        'SELECT id FROM drop_channels WHERE guild_id = ? AND channel_id = ?',
-                        (guild_id, channel_id)
-                    ) as cursor:
-                        existing = await cursor.fetchone()
+            async with await database._get_connection() as db:
+                async with db.execute(
+                    'SELECT id FROM drop_channels WHERE guild_id = ? AND channel_id = ?',
+                    (guild_id, channel_id)
+                ) as cursor:
+                    existing = await cursor.fetchone()
             
             if existing:
                 return {"success": False, "message": "Channel is already configured for drops!"}
             
             # Add to database with settings
             settings_json = str(settings) if settings else "{}"
-            async with database.db_path as db_path:
-                import aiosqlite
-                async with aiosqlite.connect(db_path) as db:
-                    await db.execute(
-                        'INSERT INTO drop_channels (guild_id, channel_id, created_by, settings) VALUES (?, ?, ?, ?)',
-                        (guild_id, channel_id, created_by, settings_json)
-                    )
-                    await db.commit()
+            async with await database._get_connection() as db:
+                await db.execute(
+                    'INSERT INTO drop_channels (guild_id, channel_id, created_by, settings) VALUES (?, ?, ?, ?)',
+                    (guild_id, channel_id, created_by, settings_json)
+                )
+                await db.commit()
             
             # Update cache
             if guild_id not in self.drop_channels:
@@ -191,14 +185,12 @@ class WonderCoinsDropSystem:
             
             # Save to database
             settings_json = str(self.channel_settings[channel_key])
-            async with database.db_path as db_path:
-                import aiosqlite
-                async with aiosqlite.connect(db_path) as db:
-                    await db.execute(
-                        'UPDATE drop_channels SET settings = ? WHERE guild_id = ? AND channel_id = ?',
-                        (settings_json, guild_id, channel_id)
-                    )
-                    await db.commit()
+            async with await database._get_connection() as db:
+                await db.execute(
+                    'UPDATE drop_channels SET settings = ? WHERE guild_id = ? AND channel_id = ?',
+                    (settings_json, guild_id, channel_id)
+                )
+                await db.commit()
             
             return {"success": True, "message": "Channel drop settings updated successfully!"}
             
@@ -214,17 +206,15 @@ class WonderCoinsDropSystem:
         """Remove a channel from the drop system"""
         try:
             # Remove from database
-            async with database.db_path as db_path:
-                import aiosqlite
-                async with aiosqlite.connect(db_path) as db:
-                    cursor = await db.execute(
-                        'DELETE FROM drop_channels WHERE guild_id = ? AND channel_id = ?',
-                        (guild_id, channel_id)
-                    )
-                    await db.commit()
-                    
-                    if cursor.rowcount == 0:
-                        return {"success": False, "message": "Channel is not configured for drops!"}
+            async with await database._get_connection() as db:
+                cursor = await db.execute(
+                    'DELETE FROM drop_channels WHERE guild_id = ? AND channel_id = ?',
+                    (guild_id, channel_id)
+                )
+                await db.commit()
+                
+                if cursor.rowcount == 0:
+                    return {"success": False, "message": "Channel is not configured for drops!"}
             
             # Update cache
             if guild_id in self.drop_channels and channel_id in self.drop_channels[guild_id]:
@@ -611,69 +601,63 @@ class WonderCoinsDropSystem:
     async def _log_drop_creation(self, guild_id: str, amount: int, rarity: str, collection_type: str):
         """Log drop creation to database"""
         try:
-            async with database.db_path as db_path:
-                import aiosqlite
-                async with aiosqlite.connect(db_path) as db:
-                    await db.execute(
-                        """INSERT INTO drop_stats 
-                           (guild_id, user_id, amount, rarity, collection_type)
-                           VALUES (?, ?, ?, ?, ?)""",
-                        (guild_id, 'SYSTEM', amount, rarity, f'created_{collection_type}')
-                    )
-                    await db.commit()
+            async with await database._get_connection() as db:
+                await db.execute(
+                    """INSERT INTO drop_stats 
+                       (guild_id, user_id, amount, rarity, collection_type)
+                       VALUES (?, ?, ?, ?, ?)""",
+                    (guild_id, 'SYSTEM', amount, rarity, f'created_{collection_type}')
+                )
+                await db.commit()
         except Exception as e:
             logging.error(f"Error logging drop creation: {e}")
     
     async def _log_drop_collection(self, guild_id: str, user_id: str, amount: int, rarity: str, collection_type: str):
         """Log drop collection to database"""
         try:
-            async with database.db_path as db_path:
-                import aiosqlite
-                async with aiosqlite.connect(db_path) as db:
-                    await db.execute(
-                        """INSERT INTO drop_stats 
-                           (guild_id, user_id, amount, rarity, collection_type)
-                           VALUES (?, ?, ?, ?, ?)""",
-                        (guild_id, user_id, amount, rarity, collection_type)
-                    )
-                    await db.commit()
+            async with await database._get_connection() as db:
+                await db.execute(
+                    """INSERT INTO drop_stats 
+                       (guild_id, user_id, amount, rarity, collection_type)
+                       VALUES (?, ?, ?, ?, ?)""",
+                    (guild_id, user_id, amount, rarity, collection_type)
+                )
+                await db.commit()
         except Exception as e:
             logging.error(f"Error logging drop collection: {e}")
     
     async def _update_user_drop_stats(self, user_id: str, amount: int, rarity: str):
         """Update user's drop statistics"""
         try:
-            async with database.db_path as db_path:
-                import aiosqlite
-                async with aiosqlite.connect(db_path) as db:
-                    # Check if user stats exist
-                    async with db.execute(
-                        'SELECT * FROM user_drop_stats WHERE user_id = ?', (user_id,)
-                    ) as cursor:
-                        existing = await cursor.fetchone()
-                    
-                    if existing:
-                        # Update existing stats
-                        await db.execute(
-                            """UPDATE user_drop_stats SET 
-                               total_collected = total_collected + ?,
-                               total_drops = total_drops + 1,
-                               {}_drops = {}_drops + 1,
-                               last_drop = CURRENT_TIMESTAMP,
-                               best_drop = MAX(best_drop, ?)
-                               WHERE user_id = ?""".format(rarity, rarity),
-                            (amount, amount, user_id)
-                        )
-                    else:
-                        # Create new stats record
-                        await db.execute(
-                            """INSERT INTO user_drop_stats 
-                               (user_id, total_collected, total_drops, {}_drops, last_drop, best_drop)
-                               VALUES (?, ?, 1, 1, CURRENT_TIMESTAMP, ?)""".format(rarity),
-                            (user_id, amount, amount)
-                        )
-                    
-                    await db.commit()
+            async with await database._get_connection() as db:
+                # Check if user stats exist
+                async with db.execute(
+                    'SELECT * FROM user_drop_stats WHERE user_id = ?', (user_id,)
+                ) as cursor:
+                    existing = await cursor.fetchone()
+                
+                if existing:
+                    # Update existing stats
+                    await db.execute(
+                        """UPDATE user_drop_stats SET 
+                           total_collected = total_collected + ?,
+                           total_drops = total_drops + 1,
+                           {}_drops = {}_drops + 1,
+                           last_drop = CURRENT_TIMESTAMP,
+                           best_drop = MAX(best_drop, ?)
+                           WHERE user_id = ?""".format(rarity, rarity),
+                        (amount, amount, user_id)
+                    )
+                else:
+                    # Create new stats record
+                    await db.execute(
+                        """INSERT INTO user_drop_stats 
+                           (user_id, total_collected, total_drops, {}_drops, last_drop, best_drop)
+                           VALUES (?, ?, 1, 1, CURRENT_TIMESTAMP, ?)""".format(rarity),
+                        (user_id, amount, amount)
+                    )
+                
+                await db.commit()
                     
         except Exception as e:
             logging.error(f"Error updating user drop stats: {e}")
@@ -712,35 +696,33 @@ class WonderCoinsDropSystem:
     async def get_drop_stats(self, guild_id: str) -> Dict[str, Any]:
         """Get drop statistics for a guild"""
         try:
-            async with database.db_path as db_path:
-                import aiosqlite
-                async with aiosqlite.connect(db_path) as db:
-                    db.row_factory = aiosqlite.Row
-                    
-                    # Get total drops created
-                    async with db.execute(
-                        """SELECT COUNT(*) as total_drops, SUM(amount) as total_amount
-                           FROM drop_stats WHERE guild_id = ? AND user_id = 'SYSTEM'""",
-                        (guild_id,)
-                    ) as cursor:
-                        drop_stats = await cursor.fetchone()
-                    
-                    # Get collection stats
-                    async with db.execute(
-                        """SELECT COUNT(*) as total_collections, SUM(amount) as total_collected
-                           FROM drop_stats WHERE guild_id = ? AND user_id != 'SYSTEM'""",
-                        (guild_id,)
-                    ) as cursor:
-                        collection_stats = await cursor.fetchone()
-                    
-                    # Get rarity breakdown
-                    async with db.execute(
-                        """SELECT rarity, COUNT(*) as count FROM drop_stats 
-                           WHERE guild_id = ? AND user_id = 'SYSTEM' 
-                           GROUP BY rarity""",
-                        (guild_id,)
-                    ) as cursor:
-                        rarity_stats = await cursor.fetchall()
+            async with await database._get_connection() as db:
+                db.row_factory = aiosqlite.Row
+                
+                # Get total drops created
+                async with db.execute(
+                    """SELECT COUNT(*) as total_drops, SUM(amount) as total_amount
+                       FROM drop_stats WHERE guild_id = ? AND user_id = 'SYSTEM'""",
+                    (guild_id,)
+                ) as cursor:
+                    drop_stats = await cursor.fetchone()
+                
+                # Get collection stats
+                async with db.execute(
+                    """SELECT COUNT(*) as total_collections, SUM(amount) as total_collected
+                       FROM drop_stats WHERE guild_id = ? AND user_id != 'SYSTEM'""",
+                    (guild_id,)
+                ) as cursor:
+                    collection_stats = await cursor.fetchone()
+                
+                # Get rarity breakdown
+                async with db.execute(
+                    """SELECT rarity, COUNT(*) as count FROM drop_stats 
+                       WHERE guild_id = ? AND user_id = 'SYSTEM' 
+                       GROUP BY rarity""",
+                    (guild_id,)
+                ) as cursor:
+                    rarity_stats = await cursor.fetchall()
             
             return {
                 'total_drops': drop_stats['total_drops'] or 0,
@@ -757,15 +739,13 @@ class WonderCoinsDropSystem:
     async def get_user_drop_stats(self, user_id: str) -> Optional[Dict[str, Any]]:
         """Get drop statistics for a user"""
         try:
-            async with database.db_path as db_path:
-                import aiosqlite
-                async with aiosqlite.connect(db_path) as db:
-                    db.row_factory = aiosqlite.Row
-                    async with db.execute(
-                        'SELECT * FROM user_drop_stats WHERE user_id = ?', (user_id,)
-                    ) as cursor:
-                        stats = await cursor.fetchone()
-                        return dict(stats) if stats else None
+            async with await database._get_connection() as db:
+                db.row_factory = aiosqlite.Row
+                async with db.execute(
+                    'SELECT * FROM user_drop_stats WHERE user_id = ?', (user_id,)
+                ) as cursor:
+                    stats = await cursor.fetchone()
+                    return dict(stats) if stats else None
                         
         except Exception as e:
             logging.error(f"Error getting user drop stats: {e}")

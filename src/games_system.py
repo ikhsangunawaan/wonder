@@ -547,19 +547,17 @@ class GamesSystem:
         """Get user's gambling statistics"""
         try:
             # Get transaction history for gambling activities
-            async with database.db_path as db_path:
-                import aiosqlite
-                async with aiosqlite.connect(db_path) as db:
-                    db.row_factory = aiosqlite.Row
-                    
-                    # Get all gambling transactions
-                    async with db.execute(
-                        """SELECT type, amount, description FROM transactions 
-                           WHERE user_id = ? AND type LIKE '%_win' OR type LIKE '%_loss'
-                           ORDER BY created_at DESC""",
-                        (user_id,)
-                    ) as cursor:
-                        transactions = await cursor.fetchall()
+            async with await database._get_connection() as db:
+                db.row_factory = aiosqlite.Row
+                
+                # Get all gambling transactions
+                async with db.execute(
+                    """SELECT type, amount, description FROM transactions 
+                       WHERE user_id = ? AND type LIKE '%_win' OR type LIKE '%_loss'
+                       ORDER BY created_at DESC""",
+                    (user_id,)
+                ) as cursor:
+                    transactions = await cursor.fetchall()
             
             stats = {
                 'total_games': 0,

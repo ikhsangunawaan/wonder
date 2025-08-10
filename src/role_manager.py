@@ -40,14 +40,12 @@ class RoleManager:
     async def _load_level_roles(self, guild_id: int):
         """Load level role configurations from database"""
         try:
-            async with database.db_path as db_path:
-                import aiosqlite
-                async with aiosqlite.connect(db_path) as db:
-                    db.row_factory = aiosqlite.Row
-                    async with db.execute(
-                        'SELECT * FROM level_role_config ORDER BY level_type, level'
-                    ) as cursor:
-                        rows = await cursor.fetchall()
+            async with await database._get_connection() as db:
+                db.row_factory = aiosqlite.Row
+                async with db.execute(
+                    'SELECT * FROM level_role_config ORDER BY level_type, level'
+                ) as cursor:
+                    rows = await cursor.fetchall()
             
             self.level_roles[guild_id] = {}
             for row in rows:
@@ -106,22 +104,18 @@ class RoleManager:
                 return {"success": False, "message": "Role not found!"}
             
             # Check if configuration already exists
-            async with database.db_path as db_path:
-                import aiosqlite
-                async with aiosqlite.connect(db_path) as db:
-                    async with db.execute(
-                        'SELECT id FROM level_role_config WHERE level_type = ? AND level = ?',
-                        (level_type, level)
-                    ) as cursor:
-                        existing = await cursor.fetchone()
+            async with await database._get_connection() as db:
+                async with db.execute(
+                    'SELECT id FROM level_role_config WHERE level_type = ? AND level = ?',
+                    (level_type, level)
+                ) as cursor:
+                    existing = await cursor.fetchone()
             
             if existing:
                 return {"success": False, "message": f"Role reward for {level_type} level {level} already exists!"}
             
             # Add new configuration
-            async with database.db_path as db_path:
-                import aiosqlite
-                async with aiosqlite.connect(db_path) as db:
+            async with await database._get_connection() as db:
                     await db.execute(
                         """INSERT INTO level_role_config 
                            (level_type, level, role_id, role_name, created_by)
@@ -154,17 +148,15 @@ class RoleManager:
         """Remove a level role reward configuration"""
         try:
             # Remove from database
-            async with database.db_path as db_path:
-                import aiosqlite
-                async with aiosqlite.connect(db_path) as db:
-                    cursor = await db.execute(
-                        'DELETE FROM level_role_config WHERE level_type = ? AND level = ?',
-                        (level_type, level)
-                    )
-                    await db.commit()
-                    
-                    if cursor.rowcount == 0:
-                        return {"success": False, "message": "No role reward found for that level!"}
+            async with await database._get_connection() as db:
+                cursor = await db.execute(
+                    'DELETE FROM level_role_config WHERE level_type = ? AND level = ?',
+                    (level_type, level)
+                )
+                await db.commit()
+                
+                if cursor.rowcount == 0:
+                    return {"success": False, "message": "No role reward found for that level!"}
             
             # Update cache
             if (guild_id in self.level_roles and 
@@ -181,15 +173,13 @@ class RoleManager:
     async def get_level_role_rewards(self, guild_id: int) -> List[Dict[str, Any]]:
         """Get all level role rewards for a guild"""
         try:
-            async with database.db_path as db_path:
-                import aiosqlite
-                async with aiosqlite.connect(db_path) as db:
-                    db.row_factory = aiosqlite.Row
-                    async with db.execute(
-                        'SELECT * FROM level_role_config ORDER BY level_type, level'
-                    ) as cursor:
-                        rows = await cursor.fetchall()
-                        return [dict(row) for row in rows]
+            async with await database._get_connection() as db:
+                db.row_factory = aiosqlite.Row
+                async with db.execute(
+                    'SELECT * FROM level_role_config ORDER BY level_type, level'
+                ) as cursor:
+                    rows = await cursor.fetchall()
+                    return [dict(row) for row in rows]
                         
         except Exception as e:
             logging.error(f"Error getting level role rewards: {e}")
