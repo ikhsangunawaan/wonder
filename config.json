@@ -217,7 +217,7 @@
     }
   },
   "database": {
-    "type": "mysql",
+    "type": "sqlite",
     "host": "mc.anjas.id",
     "port": 3306,
     "database": "s1056_wonder_server",
