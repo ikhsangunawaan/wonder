@@ -1904,75 +1904,78 @@ async def giveaway_create(ctx: commands.Context, prize: str, duration: str, opti
     bypass_roles = []
     description = None
     
-    i = 0
-    while i < len(args):
-        arg = args[i]
-        
-        if arg == '--channel' and i + 1 < len(args):
-            try:
-                channel_id = args[i + 1].replace('<#', '').replace('>', '')
-                channel = ctx.guild.get_channel(int(channel_id))
-                if not channel:
-                    raise ValueError("Channel not found")
-            except:
-                return await ctx.send("❌ Invalid channel specified!")
-            i += 2
-        
-        elif arg == '--winners' and i + 1 < len(args):
-            try:
-                winners = int(args[i + 1])
-                if winners < 1:
-                    raise ValueError("Winners must be at least 1")
-            except:
-                return await ctx.send("❌ Invalid number of winners specified!")
-            i += 2
-        
-        elif arg == '--required-roles' and i + 1 < len(args):
-            required_roles = parse_role_mentions(args[i + 1], ctx.guild)
-            i += 2
-        
-        elif arg == '--forbidden-roles' and i + 1 < len(args):
-            forbidden_roles = parse_role_mentions(args[i + 1], ctx.guild)
-            i += 2
-        
-        elif arg == '--winner-role' and i + 1 < len(args):
-            try:
-                role_str = args[i + 1].replace('<@&', '').replace('>', '')
-                winner_role = ctx.guild.get_role(int(role_str))
-                if not winner_role:
-                    winner_role = discord.utils.get(ctx.guild.roles, name=args[i + 1])
-            except:
-                return await ctx.send("❌ Invalid winner role specified!")
-            i += 2
-        
-        elif arg == '--min-messages' and i + 1 < len(args):
-            try:
-                min_messages = int(args[i + 1])
-                if min_messages < 0:
-                    raise ValueError("Min messages cannot be negative")
-            except:
-                return await ctx.send("❌ Invalid minimum messages specified!")
-            i += 2
-        
-        elif arg == '--min-age' and i + 1 < len(args):
-            try:
-                min_account_age = int(args[i + 1])
-                if min_account_age < 0:
-                    raise ValueError("Min age cannot be negative")
-            except:
-                return await ctx.send("❌ Invalid minimum account age specified!")
-            i += 2
-        
-        elif arg == '--bypass-roles' and i + 1 < len(args):
-            bypass_roles = parse_role_mentions(args[i + 1], ctx.guild)
-            i += 2
-        
-        elif arg == '--description' and i + 1 < len(args):
-            description = args[i + 1]
-            i += 2
-        
-        else:
-            i += 1
+    # Parse options if provided
+    if options:
+        args = options.split()
+        i = 0
+        while i < len(args):
+                arg = args[i]
+            
+                if arg == '--channel' and i + 1 < len(args):
+                    try:
+                        channel_id = args[i + 1].replace('<#', '').replace('>', '')
+                        channel = ctx.guild.get_channel(int(channel_id))
+                        if not channel:
+                            raise ValueError("Channel not found")
+                    except:
+                        return await ctx.send("❌ Invalid channel specified!")
+                    i += 2
+                
+                elif arg == '--winners' and i + 1 < len(args):
+                    try:
+                        winners = int(args[i + 1])
+                        if winners < 1:
+                            raise ValueError("Winners must be at least 1")
+                    except:
+                        return await ctx.send("❌ Invalid number of winners specified!")
+                    i += 2
+                
+                elif arg == '--required-roles' and i + 1 < len(args):
+                    required_roles = parse_role_mentions(args[i + 1], ctx.guild)
+                    i += 2
+                
+                elif arg == '--forbidden-roles' and i + 1 < len(args):
+                    forbidden_roles = parse_role_mentions(args[i + 1], ctx.guild)
+                    i += 2
+                
+                elif arg == '--winner-role' and i + 1 < len(args):
+                    try:
+                        role_str = args[i + 1].replace('<@&', '').replace('>', '')
+                        winner_role = ctx.guild.get_role(int(role_str))
+                        if not winner_role:
+                            winner_role = discord.utils.get(ctx.guild.roles, name=args[i + 1])
+                    except:
+                        return await ctx.send("❌ Invalid winner role specified!")
+                    i += 2
+                
+                elif arg == '--min-messages' and i + 1 < len(args):
+                    try:
+                        min_messages = int(args[i + 1])
+                        if min_messages < 0:
+                            raise ValueError("Min messages cannot be negative")
+                    except:
+                        return await ctx.send("❌ Invalid minimum messages specified!")
+                    i += 2
+                
+                elif arg == '--min-age' and i + 1 < len(args):
+                    try:
+                        min_account_age = int(args[i + 1])
+                        if min_account_age < 0:
+                            raise ValueError("Min age cannot be negative")
+                    except:
+                        return await ctx.send("❌ Invalid minimum account age specified!")
+                    i += 2
+                
+                elif arg == '--bypass-roles' and i + 1 < len(args):
+                    bypass_roles = parse_role_mentions(args[i + 1], ctx.guild)
+                    i += 2
+                
+                elif arg == '--description' and i + 1 < len(args):
+                    description = args[i + 1]
+                    i += 2
+                
+                else:
+                    i += 1
     
     # Create the giveaway
     result = await ctx.bot.giveaway_system.create_giveaway(
