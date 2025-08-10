@@ -356,6 +356,79 @@ class MySQLDatabase:
             )
             await cursor.close()
             return cursor.rowcount
+
+    async def save_user(self, user_data: Dict[str, Any]) -> bool:
+        """Save user data to MySQL database (supports both users and user_levels tables)"""
+        try:
+            user_id = user_data.get('user_id')
+            if not user_id:
+                return False
+            
+            async with await self._get_connection() as db:
+                cursor = await db.cursor()
+                
+                # Handle users table fields
+                user_fields = ['username', 'balance', 'daily_last_claimed', 'work_last_used', 'total_earned']
+                user_updates = {}
+                for field in user_fields:
+                    if field in user_data:
+                        user_updates[field] = user_data[field]
+                
+                if user_updates:
+                    # Check if user exists
+                    await cursor.execute('SELECT user_id FROM users WHERE user_id = %s', (user_id,))
+                    exists = await cursor.fetchone()
+                    
+                    if not exists:
+                        # Create user first
+                        await cursor.execute(
+                            'INSERT INTO users (user_id, username) VALUES (%s, %s)',
+                            (user_id, user_data.get('username', 'Unknown'))
+                        )
+                    
+                    # Update user fields
+                    if len(user_updates) > 0:
+                        set_clause = ', '.join([f'{field} = %s' for field in user_updates.keys()])
+                        values = list(user_updates.values()) + [user_id]
+                        await cursor.execute(
+                            f'UPDATE users SET {set_clause} WHERE user_id = %s',
+                            values
+                        )
+                
+                # Handle user_levels table fields
+                level_fields = ['xp', 'level', 'total_messages', 'voice_time', 'streak_days', 'text_xp', 'voice_xp', 'role_xp', 'overall_xp']
+                level_updates = {}
+                for field in level_fields:
+                    if field in user_data:
+                        level_updates[field] = user_data[field]
+                
+                if level_updates:
+                    # Check if user_levels record exists
+                    await cursor.execute('SELECT user_id FROM user_levels WHERE user_id = %s', (user_id,))
+                    exists = await cursor.fetchone()
+                    
+                    if not exists:
+                        # Create user_levels record
+                        await cursor.execute(
+                            'INSERT INTO user_levels (user_id, xp, level) VALUES (%s, %s, %s)',
+                            (user_id, level_updates.get('xp', 0), level_updates.get('level', 1))
+                        )
+                    
+                    # Update level fields
+                    if len(level_updates) > 0:
+                        set_clause = ', '.join([f'{field} = %s' for field in level_updates.keys()])
+                        values = list(level_updates.values()) + [user_id]
+                        await cursor.execute(
+                            f'UPDATE user_levels SET {set_clause} WHERE user_id = %s',
+                            values
+                        )
+                
+                await cursor.close()
+                return True
+                
+        except Exception as e:
+            logging.error(f"Error saving user data to MySQL: {e}")
+            return False
     
     async def close(self):
         """Close database connection pool"""
