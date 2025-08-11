@@ -55,9 +55,9 @@ class IntroCardView(discord.ui.View):
             user = interaction.guild.get_member(int(self.card_data['user_id']))
             if user:
                 embed = discord.Embed(
-                    title="👋 Someone wants to say hi!",
-                    description=f"{interaction.user.display_name} saw your introduction card and wants to connect!",
-                    color=0x7C3AED
+                    title="🌟 Someone wants to connect!",
+                    description=f"{interaction.user.display_name} saw your Y2K identity card and wants to connect!",
+                    color=0x9F7AEA
                 )
                 embed.add_field(name="Message", value="Feel free to reach out and make a new friend! 🤝", inline=False)
                 embed.set_thumbnail(url=interaction.user.display_avatar.url)
@@ -86,7 +86,7 @@ class IntroCardView(discord.ui.View):
             
             embed = discord.Embed(
                 title="📊 Card Statistics",
-                color=0x7C3AED
+                color=0x9F7AEA
             )
             embed.add_field(name="❤️ Likes", value=str(len(likes)), inline=True)
             embed.add_field(name="👀 Views", value=str(views), inline=True)
@@ -114,7 +114,7 @@ class IntroCardModal(discord.ui.Modal):
     """Modal for creating/editing introduction cards"""
     
     def __init__(self, existing_card: Optional[Dict[str, Any]] = None):
-        super().__init__(title="✨ Create Your Member Identity Card" if not existing_card else "✏️ Edit Your Member Identity Card")
+        super().__init__(title="🌟 Create Your Y2K Identity Card" if not existing_card else "✏️ Edit Your Y2K Identity Card")
         self.existing_card = existing_card
         
         # Nickname field
@@ -184,7 +184,7 @@ class IntroCardModal(discord.ui.Modal):
                     await interaction.followup.send("❌ Please enter a valid number for age.", ephemeral=True)
                     return
             
-            # Create card data for member identity card
+            # Create card data for Y2K identity card
             card_data = {
                 'user_id': str(interaction.user.id),
                 'guild_id': str(interaction.guild.id),
@@ -193,8 +193,8 @@ class IntroCardModal(discord.ui.Modal):
                 'gender': self.gender_input.value.strip() or None,
                 'location': self.location_input.value.strip() or None,
                 'hobbies': self.hobbies_input.value.strip() or None,
-                'favorite_color': '#FF8C3C',  # Orange theme for member card
-                'background_style': 'member_card',  # Custom member card style
+                'favorite_color': '#9F7AEA',  # Purple theme for Y2K aesthetic
+                'background_style': 'y2k_holographic',  # Y2K holographic style
             }
             
             # Save to database
@@ -202,9 +202,9 @@ class IntroCardModal(discord.ui.Modal):
             
             if card_id:
                 embed = discord.Embed(
-                    title="✅ Member Identity Card Saved!",
-                    description="Your member identity card has been created successfully!",
-                    color=0x10B981
+                    title="✅ Y2K Identity Card Saved!",
+                    description="Your Y2K identity card has been created successfully! ✨",
+                    color=0x9F7AEA
                 )
                 embed.add_field(name="Next Steps", value="Use `/intro-view` to see your card\nUse `/intro-edit` to modify your information", inline=False)
                 await interaction.followup.send(embed=embed, ephemeral=True)
@@ -231,8 +231,8 @@ class IntroCardSystem:
     async def create_card_embed(self, card_data: Dict[str, Any], user: discord.Member) -> discord.Embed:
         """Create an embed for displaying card info"""
         embed = discord.Embed(
-            title=f"🆔 {card_data.get('name', 'Unknown')}'s Member Card",
-            color=int(card_data.get('favorite_color', '#FF8C3C').replace('#', ''), 16)
+            title=f"🌟 {card_data.get('name', 'Unknown')}'s Y2K Identity Card",
+            color=int(card_data.get('favorite_color', '#9F7AEA').replace('#', ''), 16)
         )
         
         # Basic info
@@ -245,7 +245,7 @@ class IntroCardSystem:
             info_parts.append(f"🏙️ {card_data['location']}")
         
         if info_parts:
-            embed.add_field(name="Member Info", value="\n".join(info_parts), inline=True)
+            embed.add_field(name="🎮 User Info", value="\n".join(info_parts), inline=True)
         
         # Hobby
         if card_data.get('hobbies'):
@@ -260,7 +260,7 @@ class IntroCardSystem:
         
         # Footer
         created_time = datetime.fromisoformat(card_data['created_at'])
-        embed.set_footer(text=f"Member since {created_time.strftime('%B %d, %Y')} • MenggokiI Cafe")
+        embed.set_footer(text=f"Connected since {created_time.strftime('%B %d, %Y')} • Wonder ✨")
         
         return embed
     
@@ -271,8 +271,8 @@ class IntroCardSystem:
             if card_data.get('id'):
                 await database.add_card_interaction(card_data['id'], str(user.id), 'view')
             
-            # Generate member identity card
-            return await canvas_utils.create_member_identity_card(user, card_data)
+            # Generate Y2K identity card
+            return await canvas_utils.create_y2k_identity_card(user, card_data)
         except Exception as e:
             logging.error(f"Error generating card image: {e}")
             raise

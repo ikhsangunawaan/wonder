@@ -89,7 +89,7 @@ class Database:
                     age {self._get_sql_syntax('integer')},
                     location {self._get_sql_syntax('text')},
                     hobbies {self._get_sql_syntax('text')},
-                    favorite_color VARCHAR(255) DEFAULT '#7C3AED',
+                    favorite_color VARCHAR(255) DEFAULT '#9F7AEA',
                     bio {self._get_sql_syntax('text')},
                     social_media {self._get_sql_syntax('text')},
                     occupation {self._get_sql_syntax('text')},
@@ -516,7 +516,7 @@ class Database:
                        card_template=?, background_style=?, is_public=?, updated_at=CURRENT_TIMESTAMP
                        WHERE user_id=?""",
                     (data.get('name'), data.get('age'), data.get('location'), 
-                     data.get('hobbies'), data.get('favorite_color', '#7C3AED'), data.get('bio'),
+                     data.get('hobbies'), data.get('favorite_color', '#9F7AEA'), data.get('bio'),
                      data.get('social_media'), data.get('occupation'), data.get('pronouns'),
                      data.get('gender'), data.get('timezone'), data.get('fun_fact'), data.get('card_template', 'default'),
                      data.get('background_style', 'gradient'), data.get('is_public', True),
@@ -533,10 +533,10 @@ class Database:
                         background_style, is_public) 
                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (data['user_id'], data.get('guild_id'), data.get('name'), data.get('age'), 
-                     data.get('location'), data.get('hobbies'), data.get('favorite_color', '#7C3AED'), 
+                     data.get('location'), data.get('hobbies'), data.get('favorite_color', '#9F7AEA'), 
                      data.get('bio'), data.get('social_media'), data.get('occupation'), 
                      data.get('pronouns'), data.get('gender'), data.get('timezone'), data.get('fun_fact'),
-                     data.get('card_template', 'default'), data.get('background_style', 'gradient'),
+                     data.get('card_template', 'default'), data.get('background_style', 'y2k_holographic'),
                      data.get('is_public', True))
                 )
                 await db.commit()

@@ -635,5 +635,405 @@ class CanvasUtils:
         img.save(img_bytes, format='PNG')
         return img_bytes.getvalue()
 
+    async def create_y2k_identity_card(self, user, card_data: Dict[str, Any]) -> bytes:
+        """Create a Y2K aesthetic identity card with chrome effects and purple theme"""
+        try:
+            from database import database
+            
+            # Card dimensions
+            card_width = 850
+            card_height = 500
+            
+            # Create base image
+            img = Image.new('RGB', (card_width, card_height), color='white')
+            draw = ImageDraw.Draw(img)
+            
+            # Create Y2K holographic background
+            self._create_y2k_holographic_background(img, draw, card_width, card_height)
+            
+            # Add chrome grid pattern overlay
+            self._add_chrome_grid_pattern(img, draw, card_width, card_height)
+            
+            # Main card content area (with chrome border)
+            card_margin = 25
+            border_width = 3
+            card_content_x = card_margin + border_width
+            card_content_y = card_margin + 70  # Space for title
+            card_content_width = card_width - (card_margin + border_width) * 2
+            card_content_height = card_height - card_content_y - card_margin - 70  # Space for footer
+            
+            # Create chrome border effect
+            self._create_chrome_border(draw, card_margin, card_content_y - 5, 
+                                     card_width - card_margin * 2, card_content_height + 10)
+            
+            # Create glass-like content background
+            content_bg = Image.new('RGBA', (card_content_width, card_content_height), color=(40, 20, 80, 200))
+            content_bg = self._add_rounded_corners(content_bg, 12)
+            
+            # Add holographic overlay to content area
+            holo_overlay = self._create_holographic_overlay(card_content_width, card_content_height)
+            content_bg.paste(holo_overlay, (0, 0), holo_overlay)
+            
+            # Apply content background
+            img.paste(content_bg, (card_content_x, card_content_y), content_bg)
+            
+            # Title with Y2K chrome effect
+            title_font = self._get_font('title', 40)
+            title_text = "◊ IDENTITY CARD ◊"
+            title_bbox = draw.textbbox((0, 0), title_text, font=title_font)
+            title_width = title_bbox[2] - title_bbox[0]
+            title_x = (card_width - title_width) // 2
+            title_y = 15
+            
+            # Chrome text effect for title
+            self._draw_chrome_text(draw, title_x, title_y, title_text, title_font, size='large')
+            
+            # Avatar section with chrome frame
+            avatar_size = 130
+            avatar_x = card_content_x + 25
+            avatar_y = card_content_y + 25
+            
+            # Chrome frame for avatar
+            self._draw_chrome_frame(draw, avatar_x - 5, avatar_y - 5, avatar_size + 10, avatar_size + 10)
+            
+            # Get and draw user avatar
+            avatar = await self._get_user_avatar(user)
+            if avatar:
+                # Create hexagonal mask for Y2K aesthetic
+                avatar_mask = self._create_hexagonal_mask(avatar_size, avatar_size)
+                avatar = avatar.resize((avatar_size, avatar_size))
+                avatar.putalpha(avatar_mask)
+                img.paste(avatar, (avatar_x, avatar_y), avatar)
+            else:
+                # Fallback: hexagonal shape with chrome effect
+                self._draw_hexagonal_avatar(draw, avatar_x, avatar_y, avatar_size, card_data.get('name', 'U'))
+            
+            # Information fields with Y2K styling
+            info_start_x = avatar_x + avatar_size + 35
+            info_start_y = avatar_y + 15
+            field_height = 32
+            
+            # Define fields with Y2K formatting
+            fields = [
+                ("NICKNAME", card_data.get('name', 'N/A').upper()),
+                ("AGE", f"{card_data.get('age', 'N/A')}" + (" YRS" if card_data.get('age') else "")),
+                ("GENDER", card_data.get('gender', 'N/A').upper()),
+                ("LOCATION", card_data.get('location', 'N/A').upper()),
+                ("INTEREST", card_data.get('hobbies', 'N/A'))
+            ]
+            
+            # Draw information fields with Y2K styling
+            self._draw_y2k_info_fields(draw, fields, info_start_x, info_start_y, field_height)
+            
+            # Footer with Wonder branding and Y2K elements
+            footer_y = card_height - 50
+            
+            # Wonder logo with chrome effect
+            brand_font = self._get_font('bold', 32)
+            brand_text = "W O N D E R"
+            brand_bbox = draw.textbbox((0, 0), brand_text, font=brand_font)
+            brand_x = card_margin + 25
+            self._draw_chrome_text(draw, brand_x, footer_y, brand_text, brand_font, size='medium')
+            
+            # Y2K decorative elements
+            self._add_y2k_decorations(draw, card_width, card_height)
+            
+            # Holographic ID section
+            id_number = f"{user.id % 1000000000000000:015d}"
+            self._draw_y2k_id_section(draw, id_number, card_width, footer_y)
+            
+            # Final holographic overlay
+            final_holo = self._create_subtle_holographic_overlay(card_width, card_height)
+            img.paste(final_holo, (0, 0), final_holo)
+            
+            # Convert to bytes
+            img_bytes = io.BytesIO()
+            img.save(img_bytes, format='PNG')
+            return img_bytes.getvalue()
+            
+        except Exception as e:
+            logging.error(f"Error creating Y2K identity card: {e}")
+            return self._create_error_image()
+    
+    def _create_y2k_holographic_background(self, img: Image.Image, draw: ImageDraw.Draw, width: int, height: int):
+        """Create Y2K holographic gradient background"""
+        # Y2K purple/pink gradient with chrome accents
+        colors = [
+            (120, 50, 200),   # Deep purple
+            (180, 70, 255),   # Bright purple
+            (220, 120, 255),  # Light purple
+            (255, 150, 220),  # Pink
+            (150, 100, 255),  # Blue-purple
+            (100, 60, 180)    # Dark purple
+        ]
+        
+        # Create complex gradient
+        for y in range(height):
+            for x in range(width):
+                # Create wave-like color transitions
+                wave1 = math.sin(x * 0.01) * 0.3
+                wave2 = math.cos(y * 0.015) * 0.3
+                combined_wave = (wave1 + wave2 + 1) / 2
+                
+                # Select color based on position and waves
+                color_index = int(combined_wave * (len(colors) - 1))
+                color_index = max(0, min(color_index, len(colors) - 1))
+                
+                # Add some variation
+                base_color = colors[color_index]
+                variation = int(math.sin(x * 0.02 + y * 0.02) * 15)
+                
+                r = max(0, min(255, base_color[0] + variation))
+                g = max(0, min(255, base_color[1] + variation))
+                b = max(0, min(255, base_color[2] + variation))
+                
+                # Set pixel (for performance, we'll use lines instead)
+                if x == 0:  # Only draw vertical lines for performance
+                    draw.line([(x, y), (x, y)], fill=(r, g, b))
+        
+        # Simplified approach for better performance
+        for y in range(height):
+            ratio1 = y / height
+            ratio2 = math.sin(y * 0.02) * 0.3 + 0.5
+            
+            # Blend between purple tones
+            r = int(120 + (180 - 120) * ratio1 + 30 * ratio2)
+            g = int(50 + (120 - 50) * ratio1 + 20 * ratio2)
+            b = int(200 + (255 - 200) * ratio1 + 15 * ratio2)
+            
+            r = max(0, min(255, r))
+            g = max(0, min(255, g))
+            b = max(0, min(255, b))
+            
+            draw.line([(0, y), (width, y)], fill=(r, g, b))
+    
+    def _add_chrome_grid_pattern(self, img: Image.Image, draw: ImageDraw.Draw, width: int, height: int):
+        """Add chrome grid pattern overlay"""
+        grid_overlay = Image.new('RGBA', (width, height), (0, 0, 0, 0))
+        grid_draw = ImageDraw.Draw(grid_overlay)
+        
+        grid_size = 40
+        line_width = 1
+        
+        # Draw grid lines with chrome effect
+        for x in range(0, width, grid_size):
+            grid_draw.line([(x, 0), (x, height)], fill=(200, 200, 255, 30), width=line_width)
+        
+        for y in range(0, height, grid_size):
+            grid_draw.line([(0, y), (width, y)], fill=(200, 200, 255, 30), width=line_width)
+        
+        img.paste(grid_overlay, (0, 0), grid_overlay)
+    
+    def _create_chrome_border(self, draw: ImageDraw.Draw, x: int, y: int, width: int, height: int):
+        """Create chrome border effect"""
+        border_colors = [
+            (255, 255, 255, 180),  # Bright highlight
+            (200, 200, 255, 150),  # Chrome
+            (150, 150, 200, 120),  # Medium
+            (100, 100, 150, 100),  # Shadow
+        ]
+        
+        for i, color in enumerate(border_colors):
+            border_width = len(border_colors) - i
+            draw.rounded_rectangle(
+                (x - i, y - i, x + width + i, y + height + i),
+                radius=15 + i,
+                outline=color[:3],
+                width=border_width
+            )
+    
+    def _create_holographic_overlay(self, width: int, height: int) -> Image.Image:
+        """Create holographic rainbow overlay"""
+        overlay = Image.new('RGBA', (width, height), (0, 0, 0, 0))
+        overlay_draw = ImageDraw.Draw(overlay)
+        
+        # Create rainbow stripes
+        stripe_height = 3
+        colors = [
+            (255, 100, 255, 40),  # Magenta
+            (100, 200, 255, 40),  # Cyan
+            (255, 255, 100, 40),  # Yellow
+            (100, 255, 100, 40),  # Green
+        ]
+        
+        for y in range(0, height, stripe_height * len(colors)):
+            for i, color in enumerate(colors):
+                stripe_y = y + i * stripe_height
+                if stripe_y < height:
+                    overlay_draw.rectangle(
+                        (0, stripe_y, width, stripe_y + stripe_height),
+                        fill=color
+                    )
+        
+        return overlay
+    
+    def _draw_chrome_text(self, draw: ImageDraw.Draw, x: int, y: int, text: str, font: ImageFont.FreeTypeFont, size: str = 'medium'):
+        """Draw text with chrome effect"""
+        offsets = [(2, 2), (1, 1), (0, 0)] if size == 'large' else [(1, 1), (0, 0)]
+        colors = [(0, 0, 0, 100), (100, 100, 150, 200), (255, 255, 255, 255)]
+        
+        for i, (offset_x, offset_y) in enumerate(offsets):
+            color = colors[min(i, len(colors) - 1)]
+            draw.text((x + offset_x, y + offset_y), text, fill=color[:3], font=font)
+    
+    def _create_hexagonal_mask(self, width: int, height: int) -> Image.Image:
+        """Create hexagonal mask for Y2K aesthetic"""
+        mask = Image.new('L', (width, height), 0)
+        mask_draw = ImageDraw.Draw(mask)
+        
+        center_x, center_y = width // 2, height // 2
+        radius = min(width, height) // 2 - 5
+        
+        # Calculate hexagon points
+        points = []
+        for i in range(6):
+            angle = i * math.pi / 3
+            x = center_x + radius * math.cos(angle)
+            y = center_y + radius * math.sin(angle)
+            points.append((x, y))
+        
+        mask_draw.polygon(points, fill=255)
+        return mask
+    
+    def _draw_hexagonal_avatar(self, draw: ImageDraw.Draw, x: int, y: int, size: int, name: str):
+        """Draw hexagonal avatar fallback"""
+        center_x, center_y = x + size // 2, y + size // 2
+        radius = size // 2 - 5
+        
+        # Calculate hexagon points
+        points = []
+        for i in range(6):
+            angle = i * math.pi / 3
+            px = center_x + radius * math.cos(angle)
+            py = center_y + radius * math.sin(angle)
+            points.append((px, py))
+        
+        # Draw hexagon with gradient
+        draw.polygon(points, fill=(150, 100, 255))
+        
+        # Draw initials
+        initials = ''.join([n[0] for n in name.split()]).upper()
+        initials_font = self._get_font('bold', 36)
+        bbox = draw.textbbox((0, 0), initials, font=initials_font)
+        text_width = bbox[2] - bbox[0]
+        text_height = bbox[3] - bbox[1]
+        text_x = center_x - text_width // 2
+        text_y = center_y - text_height // 2
+        draw.text((text_x, text_y), initials, fill='white', font=initials_font)
+    
+    def _draw_chrome_frame(self, draw: ImageDraw.Draw, x: int, y: int, width: int, height: int):
+        """Draw chrome frame around element"""
+        colors = [(255, 255, 255), (200, 200, 255), (150, 150, 200)]
+        
+        for i, color in enumerate(colors):
+            draw.rounded_rectangle(
+                (x - i, y - i, x + width + i, y + height + i),
+                radius=8 + i,
+                outline=color,
+                width=2
+            )
+    
+    def _draw_y2k_info_fields(self, draw: ImageDraw.Draw, fields: list, start_x: int, start_y: int, field_height: int):
+        """Draw information fields with Y2K styling"""
+        label_font = self._get_font('bold', 14)
+        value_font = self._get_font('regular', 16)
+        
+        current_y = start_y
+        
+        for label, value in fields:
+            # Draw label with chrome effect
+            draw.text((start_x, current_y), label, fill=(200, 200, 255), font=label_font)
+            
+            # Draw field background with holographic effect
+            field_bg_x = start_x + 100
+            field_bg_y = current_y - 2
+            field_bg_width = 280
+            field_bg_height = 22
+            
+            # Holographic field background
+            colors = [(80, 40, 120, 180), (120, 80, 160, 180), (160, 120, 200, 180)]
+            for i, color in enumerate(colors):
+                draw.rounded_rectangle(
+                    (field_bg_x - i, field_bg_y - i, field_bg_x + field_bg_width + i, field_bg_y + field_bg_height + i),
+                    radius=8,
+                    fill=color
+                )
+            
+            # Draw value text with slight glow effect
+            draw.text((field_bg_x + 8, current_y), str(value), fill=(255, 255, 255), font=value_font)
+            
+            current_y += field_height
+    
+    def _add_y2k_decorations(self, draw: ImageDraw.Draw, width: int, height: int):
+        """Add Y2K decorative elements"""
+        # Floating geometric shapes
+        shapes = [
+            {'type': 'circle', 'pos': (width - 120, 80), 'size': 20, 'color': (255, 200, 255, 100)},
+            {'type': 'triangle', 'pos': (width - 80, 200), 'size': 15, 'color': (200, 255, 255, 100)},
+            {'type': 'diamond', 'pos': (80, height - 100), 'size': 18, 'color': (255, 255, 200, 100)},
+            {'type': 'star', 'pos': (width - 150, height - 80), 'size': 12, 'color': (255, 150, 255, 100)},
+        ]
+        
+        for shape in shapes:
+            x, y = shape['pos']
+            size = shape['size']
+            color = shape['color'][:3]  # Remove alpha for now
+            
+            if shape['type'] == 'circle':
+                draw.ellipse((x, y, x + size, y + size), fill=color)
+            elif shape['type'] == 'diamond':
+                points = [(x + size//2, y), (x + size, y + size//2), (x + size//2, y + size), (x, y + size//2)]
+                draw.polygon(points, fill=color)
+    
+    def _draw_y2k_id_section(self, draw: ImageDraw.Draw, id_number: str, card_width: int, footer_y: int):
+        """Draw ID section with Y2K styling"""
+        id_font = self._get_font('regular', 14)
+        
+        # Draw ID with chrome effect
+        id_text = f"ID: {id_number[:8]}•••"
+        id_bbox = draw.textbbox((0, 0), id_text, font=id_font)
+        id_width = id_bbox[2] - id_bbox[0]
+        id_x = card_width - id_width - 40
+        
+        # Chrome text effect for ID
+        self._draw_chrome_text(draw, id_x, footer_y + 10, id_text, id_font)
+        
+        # Holographic barcode
+        barcode_x = id_x
+        barcode_y = footer_y - 10
+        colors = [(255, 100, 255), (100, 255, 255), (255, 255, 100)]
+        
+        for i in range(0, 60, 3):
+            color = colors[i % len(colors)]
+            if i % 6 == 0:  # Vary bar pattern
+                draw.rectangle(
+                    (barcode_x + i, barcode_y, barcode_x + i + 2, barcode_y + 12),
+                    fill=color
+                )
+    
+    def _create_subtle_holographic_overlay(self, width: int, height: int) -> Image.Image:
+        """Create subtle final holographic overlay"""
+        overlay = Image.new('RGBA', (width, height), (0, 0, 0, 0))
+        overlay_draw = ImageDraw.Draw(overlay)
+        
+        # Add subtle rainbow gradients in corners
+        gradient_size = 100
+        
+        # Top-left corner
+        for i in range(gradient_size):
+            alpha = int(30 * (1 - i / gradient_size))
+            color = (255, 200, 255, alpha)
+            overlay_draw.ellipse((0, 0, i*2, i*2), fill=color)
+        
+        # Bottom-right corner  
+        for i in range(gradient_size):
+            alpha = int(30 * (1 - i / gradient_size))
+            color = (200, 255, 255, alpha)
+            start_x = width - i*2
+            start_y = height - i*2
+            overlay_draw.ellipse((start_x, start_y, width, height), fill=color)
+        
+        return overlay
+
 # Global canvas utils instance
 canvas_utils = CanvasUtils()
