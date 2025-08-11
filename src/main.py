@@ -334,7 +334,7 @@ async def balance(ctx: commands.Context, user: str = None):
               f"Member Since: {target_user.joined_at.strftime('%B %d, %Y') if target_user.joined_at else 'Unknown'}",
         inline=False
     )
-    embed.set_footer(text="Wonder Bot • Where Wonder Meets Chrome Dreams", 
+    embed.set_footer(text="Wonder Bot", 
                     icon_url="https://cdn.discordapp.com/emojis/✨.png")
     
     await ctx.send(embed=embed)
@@ -374,7 +374,7 @@ async def daily(ctx: commands.Context):
                 value="Daily rewards reset every 24 hours and include bonus rewards for Boosters and Premium members!",
                 inline=False
             )
-            embed.set_footer(text="Wonder Bot • Where Wonder Meets Chrome Dreams")
+            embed.set_footer(text="Wonder Bot")
             await ctx.send(embed=embed)
             return
     
@@ -424,7 +424,7 @@ async def daily(ctx: commands.Context):
         value="Available in 24 hours",
         inline=True
     )
-    embed.set_footer(text="Wonder Bot • Where Wonder Meets Chrome Dreams")
+    embed.set_footer(text="Wonder Bot")
     
     await ctx.send(embed=embed)
 
@@ -454,7 +454,7 @@ async def work(ctx: commands.Context):
                 description=f"You can work again in **{minutes}m {seconds}s**",
                 color=int(config.colors['warning'].replace('#', ''), 16)
             )
-            embed.set_footer(text="Wonderkind • Where Wonder Meets Chrome Dreams")
+            embed.set_footer(text="Wonderkind")
             await ctx.send(embed=embed)
             return
     
@@ -484,7 +484,7 @@ async def work(ctx: commands.Context):
         color=int(config.colors['success'].replace('#', ''), 16)
     )
     embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.display_avatar.url)
-    embed.set_footer(text="Wonderkind • Where Wonder Meets Chrome Dreams")
+    embed.set_footer(text="Wonderkind")
     
     await ctx.send(embed=embed)
 
@@ -499,7 +499,7 @@ async def leaderboard(ctx: commands.Context):
             description="No users found on the leaderboard yet!",
             color=int(config.colors['warning'].replace('#', ''), 16)
         )
-        embed.set_footer(text="Wonderkind • Where Wonder Meets Chrome Dreams")
+        embed.set_footer(text="Wonderkind")
         await ctx.send(embed=embed)
         return
     
@@ -520,7 +520,7 @@ async def leaderboard(ctx: commands.Context):
             continue
     
     embed.description = description
-    embed.set_footer(text=f"Total dreamers: {len(top_users)} • Wonderkind • Where Wonder Meets Chrome Dreams")
+    embed.set_footer(text=f"Total dreamers: {len(top_users)} • Wonderkind")
     
     await ctx.send(embed=embed)
 
@@ -559,7 +559,7 @@ async def coinflip(ctx: commands.Context, bet_amount: int, choice: str):
             description=result['message'],
             color=int(config.colors['error'].replace('#', ''), 16)
         )
-        error_embed.set_footer(text="Wonderkind • Where Wonder Meets Chrome Dreams")
+        error_embed.set_footer(text="Wonderkind")
         await ctx.send(embed=error_embed)
         return
     
@@ -600,7 +600,7 @@ async def dice(ctx: commands.Context, bet_amount: int, target: int):
             description=result['message'],
             color=int(config.colors['error'].replace('#', ''), 16)
         )
-        error_embed.set_footer(text="Wonderkind • Where Wonder Meets Chrome Dreams")
+        error_embed.set_footer(text="Wonderkind")
         await ctx.send(embed=error_embed)
         return
     
@@ -630,7 +630,7 @@ async def slots(ctx: commands.Context, bet_amount: int):
             description=result['message'],
             color=int(config.colors['error'].replace('#', ''), 16)
         )
-        error_embed.set_footer(text="Wonderkind • Where Wonder Meets Chrome Dreams")
+        error_embed.set_footer(text="Wonderkind")
         await ctx.send(embed=error_embed)
         return
     
@@ -2094,7 +2094,7 @@ async def quick_giveaway(ctx: commands.Context, duration: str, winners: int, *, 
     await ctx.send(embed=embed)
 
 # Admin Commands (Hybrid: both prefix and slash)
-@commands.hybrid_command(name='adddrops')
+@commands.hybrid_command(name='drop-add-channel')
 @commands.has_permissions(manage_guild=True)
 @app_commands.describe(channel='Channel to add to drop system (mention or ID - optional, defaults to current)')
 async def add_drop_channel(ctx: commands.Context, channel: str = None):
@@ -2102,7 +2102,7 @@ async def add_drop_channel(ctx: commands.Context, channel: str = None):
     if channel:
         target_channel = parse_channel_mention_or_id(channel, ctx.guild)
         if not target_channel:
-            await send_command_error(ctx, "channel_not_found", "adddrops", f"Channel '{channel}' not found. Use mention (#channel) or ID.")
+            await send_command_error(ctx, "channel_not_found", "drop-add-channel", f"Channel '{channel}' not found. Use mention (#channel) or ID.")
             return
     else:
         target_channel = ctx.channel
@@ -2117,11 +2117,11 @@ async def add_drop_channel(ctx: commands.Context, channel: str = None):
         color=int(config.colors['success' if result['success'] else 'error'].replace('#', ''), 16)
     )
     embed.add_field(name="Channel", value=target_channel.mention, inline=True)
-    embed.set_footer(text="Wonderkind • Where Wonder Meets Chrome Dreams")
+    embed.set_footer(text="Wonderkind")
     
     await ctx.send(embed=embed)
 
-@commands.hybrid_command(name='removedrops')
+@commands.hybrid_command(name='drop-remove-channel')
 @commands.has_permissions(manage_guild=True)
 @app_commands.describe(channel='Channel to remove from drop system (mention or ID - optional, defaults to current)')
 async def remove_drop_channel(ctx: commands.Context, channel: str = None):
@@ -2129,7 +2129,7 @@ async def remove_drop_channel(ctx: commands.Context, channel: str = None):
     if channel:
         target_channel = parse_channel_mention_or_id(channel, ctx.guild)
         if not target_channel:
-            await send_command_error(ctx, "channel_not_found", "removedrops", f"Channel '{channel}' not found. Use mention (#channel) or ID.")
+            await send_command_error(ctx, "channel_not_found", "drop-remove-channel", f"Channel '{channel}' not found. Use mention (#channel) or ID.")
             return
     else:
         target_channel = ctx.channel
@@ -2144,11 +2144,11 @@ async def remove_drop_channel(ctx: commands.Context, channel: str = None):
         color=int(config.colors['success' if result['success'] else 'error'].replace('#', ''), 16)
     )
     embed.add_field(name="Channel", value=target_channel.mention, inline=True)
-    embed.set_footer(text="Wonderkind • Where Wonder Meets Chrome Dreams")
+    embed.set_footer(text="Wonderkind")
     
     await ctx.send(embed=embed)
 
-@commands.hybrid_command(name='forcedrop')
+@commands.hybrid_command(name='drop-force')
 @commands.has_permissions(administrator=True)
 @app_commands.describe(
     amount='Custom amount of WonderCoins (optional)',
@@ -2169,10 +2169,10 @@ async def force_drop(ctx: commands.Context, amount: int = None, rarity: str = No
         embed.add_field(name="Custom Amount", value=f"{amount:,} {config.currency['symbol']}", inline=True)
     if rarity:
         embed.add_field(name="Custom Rarity", value=rarity.title(), inline=True)
-    embed.set_footer(text="Wonderkind • Where Wonder Meets Chrome Dreams")
+    embed.set_footer(text="Wonderkind")
     await ctx.send(embed=embed)
 
-@commands.hybrid_command(name='configdrops')
+@commands.hybrid_command(name='drop-configure')
 @commands.has_permissions(administrator=True)
 @app_commands.describe(channel='Channel to configure (mention or ID)', setting='Setting to change (rarity_mult, amount_mult, frequency, rarities)', value='New value for the setting')
 async def configure_drops(ctx: commands.Context, channel: str, setting: str = None, value: str = None):
@@ -2186,7 +2186,7 @@ async def configure_drops(ctx: commands.Context, channel: str, setting: str = No
     """
     target_channel = parse_channel_mention_or_id(channel, ctx.guild)
     if not target_channel:
-        await send_command_error(ctx, "channel_not_found", "configdrops", f"Channel '{channel}' not found. Use mention (#channel) or ID.")
+        await send_command_error(ctx, "channel_not_found", "drop-configure", f"Channel '{channel}' not found. Use mention (#channel) or ID.")
         return
     
     if not setting:
@@ -2266,7 +2266,7 @@ async def configure_drops(ctx: commands.Context, channel: str, setting: str = No
     
     await ctx.send(embed=embed)
 
-@commands.hybrid_command(name='dropchannels')
+@commands.hybrid_command(name='drop-list-channels')
 @commands.has_permissions(manage_guild=True)
 async def list_drop_channels(ctx: commands.Context):
     """List all configured drop channels (Admin only)"""
@@ -2989,7 +2989,7 @@ async def get_help_embed_for_user(user: discord.Member, bot: commands.Bot) -> di
     
     embed = discord.Embed(
         title=f"🌌 {config.branding['name']} - Wonder Help",
-        description=f"*Where Wonder Meets Chrome Dreams*",
+        description=f"*{config.branding['tagline']}*",
         color=int(config.colors['primary'].replace('#', ''), 16)
     )
     
@@ -3044,20 +3044,7 @@ async def get_help_embed_for_user(user: discord.Member, bot: commands.Bot) -> di
         inline=True
     )
     
-    giveaway_commands = "**Community Events:**\n" \
-                       "`w.giveaway-create` `/giveaway-create` - Advanced giveaway\n" \
-                       "`w.giveaway-list` `/giveaway-list` - View active\n"
-    
-    if is_user_admin:
-        giveaway_commands += "`w.quickgiveaway` `/quickgiveaway` - Quick setup (Admin)\n" \
-                           "`w.giveaway-end` `/giveaway-end` - End giveaway (Admin)\n" \
-                           "`w.giveaway-reroll` `/giveaway-reroll` - Reroll (Admin)"
-    
-    embed.add_field(
-        name="🎉 Giveaway System",
-        value=giveaway_commands,
-        inline=True
-    )
+    # Giveaway system only for admins now - removed from member view
     
     embed.add_field(
         name="🪙 WonderCoins Drops",
@@ -3074,11 +3061,11 @@ async def get_help_embed_for_user(user: discord.Member, bot: commands.Bot) -> di
         embed.add_field(
             name="🛡️ Admin Drop Commands",
             value="**Drop System Management:**\n"
-                  "`/adddrops` `w.adddrops` - Add drop channel\n"
-                  "`/removedrops` `w.removedrops` - Remove channel\n"
-                  "`w.dropchannels` - List channels\n"
-                  "`w.configdrops` - Configure settings\n"
-                  "`/forcedrop` `w.forcedrop` - Force drop",
+                  "`/drop-add-channel` `w.drop-add-channel` - Add drop channel\n"
+                  "`/drop-remove-channel` `w.drop-remove-channel` - Remove channel\n"
+                  "`w.drop-list-channels` - List channels\n"
+                  "`w.drop-configure` - Configure settings\n"
+                  "`/drop-force` `w.drop-force` - Force drop",
             inline=True
         )
         
@@ -3091,6 +3078,17 @@ async def get_help_embed_for_user(user: discord.Member, bot: commands.Bot) -> di
                   "`w.reset-user-xp` - Reset user XP\n"
                   "`w.set-user-currency` - Set user balance\n"
                   "`w.add-user-currency` - Add/remove currency",
+            inline=True
+        )
+        
+        embed.add_field(
+            name="🎉 Admin Giveaway System",
+            value="**Community Events (Admin/Mod Only):**\n"
+                  "`w.giveaway-create` `/giveaway-create` - Advanced giveaway\n"
+                  "`w.giveaway-list` `/giveaway-list` - View active\n"
+                  "`w.quickgiveaway` `/quickgiveaway` - Quick setup\n"
+                  "`w.giveaway-end` `/giveaway-end` - End giveaway\n"
+                  "`w.giveaway-reroll` `/giveaway-reroll` - Reroll winners",
             inline=True
         )
     
@@ -3120,7 +3118,7 @@ async def get_help_embed_for_user(user: discord.Member, bot: commands.Bot) -> di
         inline=False
     )
     
-    embed.set_footer(text=f"Wonder Bot v{config.branding['version']} • Where Wonder Meets Chrome Dreams • Use /help for this menu")
+    embed.set_footer(text=f"Wonder Bot v{config.branding['version']} • Use /help for this menu")
     embed.timestamp = datetime.now()
     
     return embed

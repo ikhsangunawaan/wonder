@@ -149,7 +149,7 @@ class GamesSystem:
             if has_luck:
                 embed.add_field(name="🍀 Wonder Luck", value="Active! +10% win chance", inline=False)
             
-            embed.set_footer(text="Wonderkind • Where Wonder Meets Chrome Dreams")
+            embed.set_footer(text="Wonderkind")
             embed.timestamp = datetime.now()
             
             # Update animation message with final result if available
@@ -310,7 +310,7 @@ class GamesSystem:
             if has_luck:
                 embed.add_field(name="🍀 Wonder Luck", value="Active! +15% target chance", inline=False)
             
-            embed.set_footer(text="Wonderkind • Where Wonder Meets Chrome Dreams")
+            embed.set_footer(text="Wonderkind")
             embed.timestamp = datetime.now()
             
             # Update animation message with final result if available
