@@ -636,7 +636,7 @@ class CanvasUtils:
         return img_bytes.getvalue()
 
     async def create_y2k_identity_card(self, user, card_data: Dict[str, Any]) -> bytes:
-        """Create a Y2K aesthetic identity card with chrome effects and purple theme"""
+        """Create a Wonder member card with Y2K aesthetic, chrome effects and purple theme"""
         try:
             from database import database
             
@@ -679,7 +679,7 @@ class CanvasUtils:
             
             # Title with Y2K chrome effect
             title_font = self._get_font('title', 40)
-            title_text = "◊ IDENTITY CARD ◊"
+            title_text = "◊ WONDER MEMBER CARD ◊"
             title_bbox = draw.textbbox((0, 0), title_text, font=title_font)
             title_width = title_bbox[2] - title_bbox[0]
             title_x = (card_width - title_width) // 2
@@ -752,7 +752,7 @@ class CanvasUtils:
             return img_bytes.getvalue()
             
         except Exception as e:
-            logging.error(f"Error creating Y2K identity card: {e}")
+            logging.error(f"Error creating Wonder member card: {e}")
             return self._create_error_image()
     
     def _create_y2k_holographic_background(self, img: Image.Image, draw: ImageDraw.Draw, width: int, height: int):

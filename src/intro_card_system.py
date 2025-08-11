@@ -56,7 +56,7 @@ class IntroCardView(discord.ui.View):
             if user:
                 embed = discord.Embed(
                     title="🌟 Someone wants to connect!",
-                    description=f"{interaction.user.display_name} saw your Y2K identity card and wants to connect!",
+                    description=f"{interaction.user.display_name} saw your Wonder member card and wants to connect!",
                     color=0x9F7AEA
                 )
                 embed.add_field(name="Message", value="Feel free to reach out and make a new friend! 🤝", inline=False)
@@ -114,7 +114,7 @@ class IntroCardModal(discord.ui.Modal):
     """Modal for creating/editing introduction cards"""
     
     def __init__(self, existing_card: Optional[Dict[str, Any]] = None):
-        super().__init__(title="🌟 Create Your Y2K Identity Card" if not existing_card else "✏️ Edit Your Y2K Identity Card")
+        super().__init__(title="🌟 Create Your Wonder Member Card" if not existing_card else "✏️ Edit Your Wonder Member Card")
         self.existing_card = existing_card
         
         # Nickname field
@@ -184,7 +184,7 @@ class IntroCardModal(discord.ui.Modal):
                     await interaction.followup.send("❌ Please enter a valid number for age.", ephemeral=True)
                     return
             
-            # Create card data for Y2K identity card
+            # Create card data for Wonder member card
             card_data = {
                 'user_id': str(interaction.user.id),
                 'guild_id': str(interaction.guild.id),
@@ -202,8 +202,8 @@ class IntroCardModal(discord.ui.Modal):
             
             if card_id:
                 embed = discord.Embed(
-                    title="✅ Y2K Identity Card Saved!",
-                    description="Your Y2K identity card has been created successfully! ✨",
+                    title="✅ Wonder Member Card Saved!",
+                    description="Your Wonder member card has been created successfully! ✨",
                     color=0x9F7AEA
                 )
                 embed.add_field(name="Next Steps", value="Use `/intro-view` to see your card\nUse `/intro-edit` to modify your information", inline=False)
@@ -231,7 +231,7 @@ class IntroCardSystem:
     async def create_card_embed(self, card_data: Dict[str, Any], user: discord.Member) -> discord.Embed:
         """Create an embed for displaying card info"""
         embed = discord.Embed(
-            title=f"🌟 {card_data.get('name', 'Unknown')}'s Y2K Identity Card",
+            title=f"🌟 {card_data.get('name', 'Unknown')}'s Wonder Member Card",
             color=int(card_data.get('favorite_color', '#9F7AEA').replace('#', ''), 16)
         )
         
@@ -271,7 +271,7 @@ class IntroCardSystem:
             if card_data.get('id'):
                 await database.add_card_interaction(card_data['id'], str(user.id), 'view')
             
-            # Generate Y2K identity card
+            # Generate Wonder member card
             return await canvas_utils.create_y2k_identity_card(user, card_data)
         except Exception as e:
             logging.error(f"Error generating card image: {e}")
