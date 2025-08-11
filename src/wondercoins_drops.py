@@ -9,6 +9,27 @@ from typing import Dict, Any, List, Optional
 from database import database
 from config import config
 
+class DropCollectionView(discord.ui.View):
+    """Button view for collecting WonderCoins drops"""
+    
+    def __init__(self, drop_system, message_id: str, expire_time: datetime):
+        super().__init__(timeout=None)
+        self.drop_system = drop_system
+        self.message_id = message_id
+        self.expire_time = expire_time
+        
+    @discord.ui.button(label='💰 Collect Coins', style=discord.ButtonStyle.primary, emoji='💰')
+    async def collect_drop(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Handle drop collection via button"""
+        await self.drop_system.handle_button_collection(interaction, self.message_id)
+        
+    def update_button_state(self):
+        """Update button state based on expiry"""
+        if datetime.now() >= self.expire_time:
+            self.collect_drop.disabled = True
+            self.collect_drop.label = 'Expired'
+            self.collect_drop.style = discord.ButtonStyle.secondary
+
 class WonderCoinsDropSystem:
     """Manages automatic WonderCoins drops in configured channels with advanced admin features"""
     
@@ -88,6 +109,8 @@ class WonderCoinsDropSystem:
         
         # Start the drop system
         self.start_drop_system.start()
+        # Start the countdown updater
+        self.update_drop_countdowns.start()
     
     async def initialize_drop_channels(self):
         """Load drop channels and their settings from database"""
@@ -301,6 +324,51 @@ class WonderCoinsDropSystem:
         except Exception as e:
             logging.error(f"Error in drop system: {e}")
     
+    @tasks.loop(minutes=1)  # Update countdown every minute
+    async def update_drop_countdowns(self):
+        """Update countdown timers for active drops"""
+        try:
+            current_time = datetime.now()
+            expired_drops = []
+            
+            for message_id, drop_data in self.active_drops.items():
+                expires_at = drop_data['expires_at']
+                
+                # Check if drop has expired
+                if current_time >= expires_at:
+                    expired_drops.append(message_id)
+                    continue
+                
+                # Calculate remaining time
+                time_remaining = expires_at - current_time
+                minutes_remaining = max(0, int(time_remaining.total_seconds() / 60))
+                
+                # Update embed footer with remaining time
+                try:
+                    guild = self.client.get_guild(int(drop_data['guild_id']))
+                    if guild:
+                        channel = guild.get_channel(int(drop_data['channel_id']))
+                        if channel:
+                            message = await channel.fetch_message(int(message_id))
+                            embed = message.embeds[0] if message.embeds else None
+                            
+                            if embed and minutes_remaining > 0:
+                                if minutes_remaining == 1:
+                                    embed.set_footer(text="Drop expires in less than 1 minute • Wonder drops are magical!")
+                                else:
+                                    embed.set_footer(text=f"Drop expires in {minutes_remaining} minutes • Wonder drops are magical!")
+                                
+                                await message.edit(embed=embed)
+                except Exception as e:
+                    logging.error(f"Error updating countdown for message {message_id}: {e}")
+            
+            # Clean up expired drops
+            for message_id in expired_drops:
+                await self._end_drop(message_id)
+                
+        except Exception as e:
+            logging.error(f"Error updating drop countdowns: {e}")
+    
     async def create_random_drop(self):
         """Create a random drop in a configured channel with advanced features"""
         try:
@@ -384,16 +452,22 @@ class WonderCoinsDropSystem:
                 amount += random.randint(-variance, variance)
                 amount = max(50, amount)  # Minimum 50 coins
             
-            # Create enhanced drop embed
-            embed = self._create_enhanced_drop_embed(amount, rarity, collection_type, settings)
+            # Calculate expiry time (12 minutes duration)
+            drop_duration_minutes = 12
+            created_at = datetime.now()
+            expires_at = created_at + timedelta(minutes=drop_duration_minutes)
             
-            # Send drop message
-            message = await channel.send(embed=embed)
+            # Create enhanced drop embed with duration
+            embed = self._create_enhanced_drop_embed(amount, rarity, collection_type, settings, drop_duration_minutes)
             
-            # Add reactions for collection
-            await message.add_reaction(collection_type['emoji'])
+            # Send drop message with button
+            message = await channel.send(embed=embed, view=DropCollectionView(self, "temp", expires_at))
             
-            # Store active drop with enhanced data
+            # Update view with correct message ID
+            view = DropCollectionView(self, str(message.id), expires_at)
+            await message.edit(view=view)
+            
+            # Store active drop with enhanced data including duration tracking
             self.active_drops[str(message.id)] = {
                 'guild_id': guild_id,
                 'channel_id': channel_id,
@@ -401,7 +475,9 @@ class WonderCoinsDropSystem:
                 'rarity': rarity,
                 'collection_type': collection_type,
                 'collectors': [],
-                'created_at': datetime.now(),
+                'created_at': created_at,
+                'expires_at': expires_at,
+                'duration_minutes': drop_duration_minutes,
                 'channel_settings': settings,
                 'forced': bool(forced_amount or forced_rarity)
             }
@@ -409,11 +485,81 @@ class WonderCoinsDropSystem:
             # Log the drop
             await self._log_drop_creation(guild_id, amount, rarity, collection_type['name'])
             
-            # Set expiry timer (drops expire after 12 minutes for better collection)
-            asyncio.create_task(self._expire_drop(message.id, 720))  # 12 minutes
+            # Set expiry timer using duration tracking
+            expire_delay_seconds = drop_duration_minutes * 60
+            asyncio.create_task(self._expire_drop(message.id, expire_delay_seconds))
             
         except Exception as e:
             logging.error(f"Error creating drop: {e}")
+    
+    async def handle_button_collection(self, interaction: discord.Interaction, message_id: str):
+        """Handle drop collection via button interaction"""
+        try:
+            user = interaction.user
+            
+            if user.bot:
+                return
+            
+            if message_id not in self.active_drops:
+                await interaction.response.send_message("❌ This drop is no longer active!", ephemeral=True)
+                return
+            
+            drop_data = self.active_drops[message_id]
+            
+            # Check if drop has expired
+            if datetime.now() >= drop_data['expires_at']:
+                await interaction.response.send_message("❌ This drop has expired!", ephemeral=True)
+                await self._end_drop(message_id)
+                return
+            
+            # Check if user already collected
+            if user.id in [collector['user_id'] for collector in drop_data['collectors']]:
+                await interaction.response.send_message("❌ You've already collected from this drop!", ephemeral=True)
+                return
+            
+            collection_type = drop_data['collection_type']
+            
+            # Calculate collection amount
+            final_amount = await self._calculate_collection_amount(user, drop_data)
+            
+            # Add to user balance
+            await database.create_user(str(user.id), user.name)
+            await database.update_balance(str(user.id), final_amount)
+            await database.add_transaction(str(user.id), 'wondercoins_drop', final_amount, 
+                                          f'Drop collection: {drop_data["rarity"]} {collection_type["name"]}')
+            
+            # Record collection
+            collection_info = {
+                'user_id': user.id,
+                'amount': final_amount,
+                'collected_at': datetime.now()
+            }
+            drop_data['collectors'].append(collection_info)
+            
+            # Log the collection
+            await self._log_drop_collection(drop_data['guild_id'], str(user.id), final_amount, 
+                                           drop_data['rarity'], collection_type['name'])
+            
+            # Update user drop stats
+            await self._update_user_drop_stats(str(user.id), final_amount, drop_data['rarity'])
+            
+            # Send success response
+            await interaction.response.send_message(
+                f"✨ Successfully collected **{final_amount:,}** {config.currency['symbol']}!", 
+                ephemeral=True
+            )
+            
+            # Check if drop should end (for quick grab)
+            if (collection_type['name'] == 'quick_grab' and 
+                len(drop_data['collectors']) >= collection_type.get('max_collectors', 3)):
+                await self._end_drop(message_id)
+                
+        except Exception as e:
+            logging.error(f"Error handling button collection: {e}")
+            try:
+                await interaction.response.send_message("❌ An error occurred while collecting the drop!", ephemeral=True)
+            except:
+                pass
     
     def _determine_rarity(self, allowed_rarities: List[str] = None, multiplier: float = 1.0) -> str:
         """Determine the rarity of a drop based on chances and restrictions"""
@@ -453,7 +599,7 @@ class WonderCoinsDropSystem:
         return self.collection_types[0]  # Fallback to standard
     
     def _create_enhanced_drop_embed(self, amount: int, rarity: str, collection_type: Dict[str, Any], 
-                                  settings: Dict[str, Any]) -> discord.Embed:
+                                  settings: Dict[str, Any], duration_minutes: int = 12) -> discord.Embed:
         """Create enhanced embed for a WonderCoins drop"""
         rarity_config = self.rarity_config[rarity]
         
@@ -488,7 +634,7 @@ class WonderCoinsDropSystem:
         
         embed.add_field(
             name="🔮 How to Collect",
-            value=f"React with {collection_type['emoji']} to collect these wonder coins!",
+            value="Click the **💰 Collect Coins** button below to claim these wonder coins!",
             inline=False
         )
         
@@ -500,62 +646,15 @@ class WonderCoinsDropSystem:
                 inline=False
             )
         
-        embed.set_footer(text="Drop expires in 12 minutes • Wonder drops are magical!")
+        embed.set_footer(text=f"Drop expires in {duration_minutes} minutes • Wonder drops are magical!")
         embed.timestamp = datetime.now()
         
         return embed
     
     async def handle_reaction_add(self, reaction: discord.Reaction, user: discord.User):
-        """Handle reactions to drop messages"""
-        if user.bot:
-            return
-        
-        message_id = str(reaction.message.id)
-        if message_id not in self.active_drops:
-            return
-        
-        drop_data = self.active_drops[message_id]
-        collection_type = drop_data['collection_type']
-        
-        # Check if reaction matches collection type
-        if str(reaction.emoji) != collection_type['emoji']:
-            return
-        
-        # Check if user already collected
-        if user.id in [collector['user_id'] for collector in drop_data['collectors']]:
-            return
-        
-        # Calculate collection amount
-        base_amount = drop_data['amount']
-        final_amount = await self._calculate_collection_amount(user, drop_data)
-        
-        # Add to user balance
-        await database.create_user(str(user.id), user.name)
-        await database.update_balance(str(user.id), final_amount)
-        await database.add_transaction(str(user.id), 'wondercoins_drop', final_amount, 
-                                      f'Drop collection: {drop_data["rarity"]} {collection_type["name"]}')
-        
-        # Record collection
-        collection_info = {
-            'user_id': user.id,
-            'amount': final_amount,
-            'collected_at': datetime.now()
-        }
-        drop_data['collectors'].append(collection_info)
-        
-        # Log the collection
-        await self._log_drop_collection(drop_data['guild_id'], str(user.id), final_amount, 
-                                       drop_data['rarity'], collection_type['name'])
-        
-        # Update user drop stats
-        await self._update_user_drop_stats(str(user.id), final_amount, drop_data['rarity'])
-        
-        # Collection confirmation removed - no DM notifications
-        
-        # Check if drop should end (for quick grab)
-        if (collection_type['name'] == 'quick_grab' and 
-            len(drop_data['collectors']) >= collection_type.get('max_collectors', 3)):
-            await self._end_drop(message_id)
+        """Handle reactions to drop messages - DEPRECATED: Now using buttons"""
+        # This method is kept for backward compatibility but drops now use buttons
+        pass
     
     async def _calculate_collection_amount(self, user: discord.User, drop_data: Dict[str, Any]) -> int:
         """Calculate the amount a user gets from collecting a drop"""
@@ -668,7 +767,7 @@ class WonderCoinsDropSystem:
         if message_id in self.active_drops:
             drop_data = self.active_drops[message_id]
             
-            # Update drop message to show it ended
+            # Update drop message to show it ended and disable button
             try:
                 guild = self.client.get_guild(int(drop_data['guild_id']))
                 if guild:
@@ -679,12 +778,19 @@ class WonderCoinsDropSystem:
                         # Update embed to show ended
                         embed = message.embeds[0] if message.embeds else None
                         if embed:
-                            embed.title = "💰 WonderCoins Drop (ENDED)"
+                            embed.title = "💰 WonderCoins Drop (EXPIRED)"
                             embed.color = discord.Color.gray()
-                            embed.set_footer(text=f"Drop ended • {len(drop_data['collectors'])} collectors")
-                            await message.edit(embed=embed)
-            except:
-                pass
+                            embed.set_footer(text=f"Drop expired • {len(drop_data['collectors'])} collectors")
+                        
+                        # Create disabled view
+                        disabled_view = DropCollectionView(self, message_id, drop_data['expires_at'])
+                        disabled_view.collect_drop.disabled = True
+                        disabled_view.collect_drop.label = 'Expired'
+                        disabled_view.collect_drop.style = discord.ButtonStyle.secondary
+                        
+                        await message.edit(embed=embed, view=disabled_view)
+            except Exception as e:
+                logging.error(f"Error updating expired drop message: {e}")
             
             # Remove from active drops
             del self.active_drops[message_id]
