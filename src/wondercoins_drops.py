@@ -500,7 +500,7 @@ class WonderCoinsDropSystem:
                 inline=False
             )
         
-        embed.set_footer(text="Drop expires in 12 minutes • Wonderkind drops are magical!")
+        embed.set_footer(text="Drop expires in 12 minutes • Wonder drops are magical!")
         embed.timestamp = datetime.now()
         
         return embed
@@ -550,11 +550,7 @@ class WonderCoinsDropSystem:
         # Update user drop stats
         await self._update_user_drop_stats(str(user.id), final_amount, drop_data['rarity'])
         
-        # Send collection confirmation
-        try:
-            await user.send(f"🎉 You collected **{final_amount:,}** {config.currency['symbol']} from a {drop_data['rarity']} drop!")
-        except:
-            pass  # User has DMs disabled
+        # Collection confirmation removed - no DM notifications
         
         # Check if drop should end (for quick grab)
         if (collection_type['name'] == 'quick_grab' and 

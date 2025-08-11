@@ -74,7 +74,7 @@ class WonderBot(commands.Bot):
         
     async def setup_hook(self):
         """Setup hook called when bot is starting"""
-        logging.info("Setting up Wonder Bot...")
+        logging.info("Setting up Wonder...")
         
         # Initialize database
         await self.database.init()
@@ -334,7 +334,7 @@ async def balance(ctx: commands.Context, user: str = None):
               f"Member Since: {target_user.joined_at.strftime('%B %d, %Y') if target_user.joined_at else 'Unknown'}",
         inline=False
     )
-    embed.set_footer(text="Wonder Bot", 
+    embed.set_footer(text="Wonder", 
                     icon_url="https://cdn.discordapp.com/emojis/✨.png")
     
     await ctx.send(embed=embed)
@@ -374,7 +374,7 @@ async def daily(ctx: commands.Context):
                 value="Daily rewards reset every 24 hours and include bonus rewards for Boosters and Premium members!",
                 inline=False
             )
-            embed.set_footer(text="Wonder Bot")
+            embed.set_footer(text="Wonder")
             await ctx.send(embed=embed)
             return
     
@@ -424,7 +424,7 @@ async def daily(ctx: commands.Context):
         value="Available in 24 hours",
         inline=True
     )
-    embed.set_footer(text="Wonder Bot")
+    embed.set_footer(text="Wonder")
     
     await ctx.send(embed=embed)
 
@@ -454,7 +454,7 @@ async def work(ctx: commands.Context):
                 description=f"You can work again in **{minutes}m {seconds}s**",
                 color=int(config.colors['warning'].replace('#', ''), 16)
             )
-            embed.set_footer(text="Wonderkind")
+            embed.set_footer(text="Wonder")
             await ctx.send(embed=embed)
             return
     
@@ -484,7 +484,7 @@ async def work(ctx: commands.Context):
         color=int(config.colors['success'].replace('#', ''), 16)
     )
     embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.display_avatar.url)
-    embed.set_footer(text="Wonderkind")
+    embed.set_footer(text="Wonder")
     
     await ctx.send(embed=embed)
 
@@ -499,7 +499,7 @@ async def leaderboard(ctx: commands.Context):
             description="No users found on the leaderboard yet!",
             color=int(config.colors['warning'].replace('#', ''), 16)
         )
-        embed.set_footer(text="Wonderkind")
+        embed.set_footer(text="Wonder")
         await ctx.send(embed=embed)
         return
     
@@ -520,7 +520,7 @@ async def leaderboard(ctx: commands.Context):
             continue
     
     embed.description = description
-    embed.set_footer(text=f"Total dreamers: {len(top_users)} • Wonderkind")
+    embed.set_footer(text=f"Total dreamers: {len(top_users)} • Wonder")
     
     await ctx.send(embed=embed)
 
@@ -559,7 +559,7 @@ async def coinflip(ctx: commands.Context, bet_amount: int, choice: str):
             description=result['message'],
             color=int(config.colors['error'].replace('#', ''), 16)
         )
-        error_embed.set_footer(text="Wonderkind")
+        error_embed.set_footer(text="Wonder")
         await ctx.send(embed=error_embed)
         return
     
@@ -600,7 +600,7 @@ async def dice(ctx: commands.Context, bet_amount: int, target: int):
             description=result['message'],
             color=int(config.colors['error'].replace('#', ''), 16)
         )
-        error_embed.set_footer(text="Wonderkind")
+        error_embed.set_footer(text="Wonder")
         await ctx.send(embed=error_embed)
         return
     
@@ -630,7 +630,7 @@ async def slots(ctx: commands.Context, bet_amount: int):
             description=result['message'],
             color=int(config.colors['error'].replace('#', ''), 16)
         )
-        error_embed.set_footer(text="Wonderkind")
+        error_embed.set_footer(text="Wonder")
         await ctx.send(embed=error_embed)
         return
     
@@ -2117,7 +2117,7 @@ async def add_drop_channel(ctx: commands.Context, channel: str = None):
         color=int(config.colors['success' if result['success'] else 'error'].replace('#', ''), 16)
     )
     embed.add_field(name="Channel", value=target_channel.mention, inline=True)
-    embed.set_footer(text="Wonderkind")
+    embed.set_footer(text="Wonder")
     
     await ctx.send(embed=embed)
 
@@ -2144,7 +2144,7 @@ async def remove_drop_channel(ctx: commands.Context, channel: str = None):
         color=int(config.colors['success' if result['success'] else 'error'].replace('#', ''), 16)
     )
     embed.add_field(name="Channel", value=target_channel.mention, inline=True)
-    embed.set_footer(text="Wonderkind")
+    embed.set_footer(text="Wonder")
     
     await ctx.send(embed=embed)
 
@@ -2169,7 +2169,7 @@ async def force_drop(ctx: commands.Context, amount: int = None, rarity: str = No
         embed.add_field(name="Custom Amount", value=f"{amount:,} {config.currency['symbol']}", inline=True)
     if rarity:
         embed.add_field(name="Custom Rarity", value=rarity.title(), inline=True)
-    embed.set_footer(text="Wonderkind")
+    embed.set_footer(text="Wonder")
     await ctx.send(embed=embed)
 
 @commands.hybrid_command(name='drop-configure')
@@ -2273,7 +2273,7 @@ async def list_drop_channels(ctx: commands.Context):
     channels = await ctx.bot.drop_system.get_channel_list(str(ctx.guild.id))
     
     embed = discord.Embed(
-        title="🌌 Wonderkind Drop Channels",
+        title="🌌 Wonder Drop Channels",
         color=int(config.colors['info'].replace('#', ''), 16)
     )
     
@@ -3009,26 +3009,26 @@ async def get_help_embed_for_user(user: discord.Member, bot: commands.Bot) -> di
               "`/coinflip` `w.coinflip` - Coin flip betting\n"
               "`/dice` `w.dice` - Dice roll betting\n"
               "`/slots` `w.slots` - Slot machine\n"
-              "`w.gamestats` - View gambling stats",
+              "`/gamestats` `w.gamestats` - View gambling stats",
         inline=True
     )
     
     embed.add_field(
         name="🏪 Shop & Inventory",
         value="**Items & Trading:**\n"
-              "`w.shop [category]` - Browse shop\n"
-              "`w.buy <item> [quantity]` - Purchase items\n"
-              "`w.inventory` - View your items\n"
-              "`w.use <item>` - Use consumables",
+              "`/shop` `w.shop [category]` - Browse shop\n"
+              "`/buy` `w.buy <item> [quantity]` - Purchase items\n"
+              "`/inventory` `w.inventory` - View your items\n"
+              "`/use` `w.use <item>` - Use consumables",
         inline=True
     )
     
     embed.add_field(
         name="🎯 Comprehensive Leveling System",
         value="**4-Category Progression with Roles:**\n"
-              "`w.rank [@user]` - View comprehensive rank\n"
-              "`w.roles [category]` - View level roles & perks\n"
-              "`w.prestige` - View prestige system info\n"
+              "`/rank` `w.rank [@user]` - View comprehensive rank\n"
+              "`/roles` `w.roles [category]` - View level roles & perks\n"
+              "`/prestige` `w.prestige` - View prestige system info\n"
               "**Categories:** Text, Voice, Community, Overall",
         inline=True
     )
@@ -3063,8 +3063,8 @@ async def get_help_embed_for_user(user: discord.Member, bot: commands.Bot) -> di
             value="**Drop System Management:**\n"
                   "`/drop-add-channel` `w.drop-add-channel` - Add drop channel\n"
                   "`/drop-remove-channel` `w.drop-remove-channel` - Remove channel\n"
-                  "`w.drop-list-channels` - List channels\n"
-                  "`w.drop-configure` - Configure settings\n"
+                  "`/drop-list-channels` `w.drop-list-channels` - List channels\n"
+                  "`/drop-configure` `w.drop-configure` - Configure settings\n"
                   "`/drop-force` `w.drop-force` - Force drop",
             inline=True
         )
@@ -3072,23 +3072,23 @@ async def get_help_embed_for_user(user: discord.Member, bot: commands.Bot) -> di
         embed.add_field(
             name="⚙️ Admin Leveling Commands",
             value="**Leveling System Management:**\n"
-                  "`w.toggle-category` - Enable/disable categories\n"
-                  "`w.set-user-xp` - Set user XP\n"
-                  "`w.add-user-xp` - Add/remove user XP\n"
-                  "`w.reset-user-xp` - Reset user XP\n"
-                  "`w.set-user-currency` - Set user balance\n"
-                  "`w.add-user-currency` - Add/remove currency",
+                  "`/toggle-category` `w.toggle-category` - Enable/disable categories\n"
+                  "`/set-user-xp` `w.set-user-xp` - Set user XP\n"
+                  "`/add-user-xp` `w.add-user-xp` - Add/remove user XP\n"
+                  "`/reset-user-xp` `w.reset-user-xp` - Reset user XP\n"
+                  "`/set-user-currency` `w.set-user-currency` - Set user balance\n"
+                  "`/add-user-currency` `w.add-user-currency` - Add/remove currency",
             inline=True
         )
         
         embed.add_field(
             name="🎉 Admin Giveaway System",
             value="**Community Events (Admin/Mod Only):**\n"
-                  "`w.giveaway-create` `/giveaway-create` - Advanced giveaway\n"
-                  "`w.giveaway-list` `/giveaway-list` - View active\n"
-                  "`w.quickgiveaway` `/quickgiveaway` - Quick setup\n"
-                  "`w.giveaway-end` `/giveaway-end` - End giveaway\n"
-                  "`w.giveaway-reroll` `/giveaway-reroll` - Reroll winners",
+                  "`/giveaway-create` `w.giveaway-create` - Advanced giveaway\n"
+                  "`/giveaway-list` `w.giveaway-list` - View active\n"
+                  "`/quickgiveaway` `w.quickgiveaway` - Quick setup\n"
+                  "`/giveaway-end` `w.giveaway-end` - End giveaway\n"
+                  "`/giveaway-reroll` `w.giveaway-reroll` - Reroll winners",
             inline=True
         )
     
@@ -3118,7 +3118,7 @@ async def get_help_embed_for_user(user: discord.Member, bot: commands.Bot) -> di
         inline=False
     )
     
-    embed.set_footer(text=f"Wonder Bot v{config.branding['version']} • Use /help for this menu")
+    embed.set_footer(text=f"Wonder v{config.branding['version']} • Use /help for this menu")
     embed.timestamp = datetime.now()
     
     return embed
