@@ -94,6 +94,7 @@ class Database:
                     social_media {self._get_sql_syntax('text')},
                     occupation {self._get_sql_syntax('text')},
                     pronouns {self._get_sql_syntax('text')},
+                    gender {self._get_sql_syntax('text')},
                     timezone {self._get_sql_syntax('text')},
                     fun_fact {self._get_sql_syntax('text')},
                     card_template VARCHAR(255) DEFAULT 'default',
@@ -156,6 +157,12 @@ class Database:
                 pass
             try:
                 await db.execute("ALTER TABLE server_settings ADD COLUMN category_overall_enabled BOOLEAN DEFAULT TRUE")
+            except:
+                pass
+            
+            # Add gender column to introduction_cards table if it doesn't exist
+            try:
+                await db.execute("ALTER TABLE introduction_cards ADD COLUMN gender TEXT")
             except:
                 pass
 
@@ -505,13 +512,13 @@ class Database:
                 cursor = await db.execute(
                     """UPDATE introduction_cards SET 
                        name=?, age=?, location=?, hobbies=?, favorite_color=?, bio=?,
-                       social_media=?, occupation=?, pronouns=?, timezone=?, fun_fact=?,
+                       social_media=?, occupation=?, pronouns=?, gender=?, timezone=?, fun_fact=?,
                        card_template=?, background_style=?, is_public=?, updated_at=CURRENT_TIMESTAMP
                        WHERE user_id=?""",
                     (data.get('name'), data.get('age'), data.get('location'), 
                      data.get('hobbies'), data.get('favorite_color', '#7C3AED'), data.get('bio'),
                      data.get('social_media'), data.get('occupation'), data.get('pronouns'),
-                     data.get('timezone'), data.get('fun_fact'), data.get('card_template', 'default'),
+                     data.get('gender'), data.get('timezone'), data.get('fun_fact'), data.get('card_template', 'default'),
                      data.get('background_style', 'gradient'), data.get('is_public', True),
                      data['user_id'])
                 )
@@ -522,13 +529,13 @@ class Database:
                 cursor = await db.execute(
                     """INSERT INTO introduction_cards 
                        (user_id, guild_id, name, age, location, hobbies, favorite_color, bio,
-                        social_media, occupation, pronouns, timezone, fun_fact, card_template,
+                        social_media, occupation, pronouns, gender, timezone, fun_fact, card_template,
                         background_style, is_public) 
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (data['user_id'], data.get('guild_id'), data.get('name'), data.get('age'), 
                      data.get('location'), data.get('hobbies'), data.get('favorite_color', '#7C3AED'), 
                      data.get('bio'), data.get('social_media'), data.get('occupation'), 
-                     data.get('pronouns'), data.get('timezone'), data.get('fun_fact'),
+                     data.get('pronouns'), data.get('gender'), data.get('timezone'), data.get('fun_fact'),
                      data.get('card_template', 'default'), data.get('background_style', 'gradient'),
                      data.get('is_public', True))
                 )

@@ -36,6 +36,227 @@ class CanvasUtils:
         
         return fonts
     
+    async def create_member_identity_card(self, user, card_data: Dict[str, Any]) -> bytes:
+        """Create a Member Identity Card similar to the reference design"""
+        try:
+            from database import database
+            
+            # Card dimensions - wider format like the reference
+            card_width = 850
+            card_height = 500
+            
+            # Create base image with orange gradient background
+            img = Image.new('RGB', (card_width, card_height), color='white')
+            draw = ImageDraw.Draw(img)
+            
+            # Create orange gradient background (orange to darker orange)
+            self._create_orange_gradient_background(img, draw, card_width, card_height)
+            
+            # Add dotted pattern overlay
+            self._add_dotted_pattern(img, draw, card_width, card_height)
+            
+            # Main card content area (white rounded rectangle)
+            card_margin = 30
+            card_content_x = card_margin
+            card_content_y = card_margin + 60  # Leave space for title
+            card_content_width = card_width - (card_margin * 2)
+            card_content_height = card_height - card_content_y - card_margin - 60  # Leave space for footer
+            
+            # Create rounded rectangle for main content
+            content_bg = Image.new('RGBA', (card_content_width, card_content_height), color=(255, 255, 255, 250))
+            content_bg = self._add_rounded_corners(content_bg, 15)
+            
+            # Add subtle shadow
+            shadow = content_bg.filter(ImageFilter.GaussianBlur(radius=3))
+            img.paste(shadow, (card_content_x + 2, card_content_y + 3), shadow)
+            img.paste(content_bg, (card_content_x, card_content_y), content_bg)
+            
+            # Title "Member Identity Card"
+            title_font = self._get_font('title', 36)
+            title_text = "Member Identity Card"
+            title_bbox = draw.textbbox((0, 0), title_text, font=title_font)
+            title_width = title_bbox[2] - title_bbox[0]
+            title_x = (card_width - title_width) // 2
+            title_y = 20
+            
+            # Add title with shadow effect
+            draw.text((title_x + 2, title_y + 2), title_text, fill=(0, 0, 0, 100), font=title_font)
+            draw.text((title_x, title_y), title_text, fill='white', font=title_font)
+            
+            # Avatar section
+            avatar_size = 140
+            avatar_x = card_content_x + 30
+            avatar_y = card_content_y + 30
+            
+            # Get and draw user avatar
+            avatar = await self._get_user_avatar(user)
+            if avatar:
+                # Create rounded rectangle mask for avatar
+                avatar_bg = Image.new('RGBA', (avatar_size + 10, avatar_size + 10), (255, 255, 255, 255))
+                avatar_bg = self._add_rounded_corners(avatar_bg, 10)
+                img.paste(avatar_bg, (avatar_x - 5, avatar_y - 5), avatar_bg)
+                
+                # Resize and crop avatar to square
+                avatar = avatar.resize((avatar_size, avatar_size))
+                avatar_mask = Image.new('L', (avatar_size, avatar_size), 0)
+                avatar_mask_draw = ImageDraw.Draw(avatar_mask)
+                avatar_mask_draw.rounded_rectangle((0, 0, avatar_size, avatar_size), radius=8, fill=255)
+                avatar.putalpha(avatar_mask)
+                img.paste(avatar, (avatar_x, avatar_y), avatar)
+            else:
+                # Fallback: draw rounded rectangle with initials
+                draw.rounded_rectangle(
+                    (avatar_x, avatar_y, avatar_x + avatar_size, avatar_y + avatar_size),
+                    radius=10,
+                    fill='#E5E7EB'
+                )
+                
+                # Draw initials
+                initials = ''.join([n[0] for n in card_data.get('name', 'U').split()]).upper()
+                initials_font = self._get_font('bold', 48)
+                initials_bbox = draw.textbbox((0, 0), initials, font=initials_font)
+                initials_width = initials_bbox[2] - initials_bbox[0]
+                initials_height = initials_bbox[3] - initials_bbox[1]
+                initials_x = avatar_x + (avatar_size - initials_width) // 2
+                initials_y = avatar_y + (avatar_size - initials_height) // 2
+                draw.text((initials_x, initials_y), initials, fill='#6B7280', font=initials_font)
+            
+            # Information fields section
+            info_start_x = avatar_x + avatar_size + 40
+            info_start_y = avatar_y + 10
+            field_height = 35
+            
+            # Define fields with their values
+            fields = [
+                ("Nickname", card_data.get('name', 'N/A')),
+                ("Age", f"{card_data.get('age', 'N/A')}" + (" (fck.)" if card_data.get('age') else "")),
+                ("Gender", card_data.get('gender', 'N/A')),
+                ("City", card_data.get('location', 'N/A')),
+                ("Hobby", card_data.get('hobbies', 'N/A'))
+            ]
+            
+            # Draw information fields
+            self._draw_info_fields(draw, fields, info_start_x, info_start_y, field_height)
+            
+            # Footer branding
+            footer_y = card_height - 45
+            brand_font = self._get_font('bold', 24)
+            brand_text = "MenggokiI Cafe"
+            draw.text((card_margin + 20, footer_y), brand_text, fill='white', font=brand_font)
+            
+            # ID and barcode section
+            id_number = f"{user.id % 1000000000000000:015d}"  # Generate a 15-digit ID from user ID
+            self._draw_id_section(draw, id_number, card_width, footer_y)
+            
+            # Convert to bytes
+            img_bytes = io.BytesIO()
+            img.save(img_bytes, format='PNG')
+            return img_bytes.getvalue()
+            
+        except Exception as e:
+            logging.error(f"Error creating member identity card: {e}")
+            return self._create_error_image()
+    
+    def _create_orange_gradient_background(self, img: Image.Image, draw: ImageDraw.Draw, width: int, height: int):
+        """Create orange gradient background like the reference"""
+        # Orange gradient colors
+        top_color = (255, 140, 60)     # Light orange
+        bottom_color = (255, 100, 20)  # Darker orange
+        
+        # Create vertical gradient
+        for y in range(height):
+            ratio = y / height
+            r = int(top_color[0] * (1 - ratio) + bottom_color[0] * ratio)
+            g = int(top_color[1] * (1 - ratio) + bottom_color[1] * ratio)
+            b = int(top_color[2] * (1 - ratio) + bottom_color[2] * ratio)
+            draw.line([(0, y), (width, y)], fill=(r, g, b))
+    
+    def _add_dotted_pattern(self, img: Image.Image, draw: ImageDraw.Draw, width: int, height: int):
+        """Add dotted pattern overlay like the reference"""
+        pattern_overlay = Image.new('RGBA', (width, height), (0, 0, 0, 0))
+        pattern_draw = ImageDraw.Draw(pattern_overlay)
+        
+        dot_spacing = 20
+        dot_size = 2
+        
+        for x in range(0, width, dot_spacing):
+            for y in range(0, height, dot_spacing):
+                pattern_draw.ellipse(
+                    (x, y, x + dot_size, y + dot_size),
+                    fill=(255, 255, 255, 80)
+                )
+        
+        img.paste(pattern_overlay, (0, 0), pattern_overlay)
+    
+    def _get_font(self, style: str, size: int) -> ImageFont.FreeTypeFont:
+        """Get font with specific style and size"""
+        try:
+            if style == 'title':
+                return ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", size)
+            elif style == 'bold':
+                return ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", size)
+            elif style == 'regular':
+                return ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", size)
+            else:
+                return ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", size)
+        except (OSError, IOError):
+            return ImageFont.load_default()
+    
+    def _draw_info_fields(self, draw: ImageDraw.Draw, fields: List[tuple], start_x: int, start_y: int, field_height: int):
+        """Draw information fields with labels and values"""
+        label_font = self._get_font('bold', 18)
+        value_font = self._get_font('regular', 18)
+        
+        current_y = start_y
+        
+        for label, value in fields:
+            # Draw label
+            draw.text((start_x, current_y), label, fill='#1F2937', font=label_font)
+            
+            # Draw field background (rounded rectangle)
+            field_bg_x = start_x + 120
+            field_bg_y = current_y - 3
+            field_bg_width = 300
+            field_bg_height = 25
+            
+            draw.rounded_rectangle(
+                (field_bg_x, field_bg_y, field_bg_x + field_bg_width, field_bg_y + field_bg_height),
+                radius=5,
+                fill='#F3F4F6',
+                outline='#D1D5DB',
+                width=1
+            )
+            
+            # Draw value text
+            draw.text((field_bg_x + 10, current_y), str(value), fill='#374151', font=value_font)
+            
+            current_y += field_height
+    
+    def _draw_id_section(self, draw: ImageDraw.Draw, id_number: str, card_width: int, footer_y: int):
+        """Draw ID number and barcode representation"""
+        id_font = self._get_font('regular', 16)
+        
+        # Draw ID number
+        id_text = f"ID: {id_number}"
+        id_bbox = draw.textbbox((0, 0), id_text, font=id_font)
+        id_width = id_bbox[2] - id_bbox[0]
+        id_x = card_width - id_width - 30
+        draw.text((id_x, footer_y + 5), id_text, fill='white', font=id_font)
+        
+        # Draw simple barcode representation
+        barcode_x = id_x
+        barcode_y = footer_y - 15
+        barcode_width = id_width
+        
+        # Simple barcode pattern
+        bar_width = 2
+        for i in range(0, barcode_width, bar_width * 2):
+            if i % 4 == 0:  # Alternate pattern
+                draw.rectangle(
+                    (barcode_x + i, barcode_y, barcode_x + i + bar_width, barcode_y + 10),
+                    fill='white'
+                )
+
     async def create_introduction_card(self, user, card_data: Dict[str, Any]) -> bytes:
         """Create an introduction card image"""
         try:
