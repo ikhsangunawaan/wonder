@@ -55,9 +55,9 @@ class IntroCardView(discord.ui.View):
             user = interaction.guild.get_member(int(self.card_data['user_id']))
             if user:
                 embed = discord.Embed(
-                    title="👋 Someone wants to say hi!",
-                    description=f"{interaction.user.display_name} saw your introduction card and wants to connect!",
-                    color=0x7C3AED
+                    title="🌟 Someone wants to connect!",
+                    description=f"{interaction.user.display_name} saw your Wonder member card and wants to connect!",
+                    color=0x9F7AEA
                 )
                 embed.add_field(name="Message", value="Feel free to reach out and make a new friend! 🤝", inline=False)
                 embed.set_thumbnail(url=interaction.user.display_avatar.url)
@@ -86,7 +86,7 @@ class IntroCardView(discord.ui.View):
             
             embed = discord.Embed(
                 title="📊 Card Statistics",
-                color=0x7C3AED
+                color=0x9F7AEA
             )
             embed.add_field(name="❤️ Likes", value=str(len(likes)), inline=True)
             embed.add_field(name="👀 Views", value=str(views), inline=True)
@@ -114,12 +114,12 @@ class IntroCardModal(discord.ui.Modal):
     """Modal for creating/editing introduction cards"""
     
     def __init__(self, existing_card: Optional[Dict[str, Any]] = None):
-        super().__init__(title="✨ Create Your Introduction Card" if not existing_card else "✏️ Edit Your Introduction Card")
+        super().__init__(title="🌟 Create Your Wonder Member Card" if not existing_card else "✏️ Edit Your Wonder Member Card")
         self.existing_card = existing_card
         
-        # Name field
+        # Nickname field
         self.name_input = discord.ui.TextInput(
-            label="Your Name",
+            label="Nickname",
             placeholder="What should people call you?",
             default=existing_card.get('name', '') if existing_card else '',
             max_length=50,
@@ -137,34 +137,32 @@ class IntroCardModal(discord.ui.Modal):
         )
         self.add_item(self.age_input)
         
-        # Location field
+        # Gender field
+        self.gender_input = discord.ui.TextInput(
+            label="Gender (optional)",
+            placeholder="Your gender identity",
+            default=existing_card.get('gender', '') if existing_card else '',
+            max_length=50,
+            required=False
+        )
+        self.add_item(self.gender_input)
+        
+        # City field
         self.location_input = discord.ui.TextInput(
-            label="Location (optional)",
-            placeholder="Where are you from?",
+            label="City (optional)",
+            placeholder="Which city are you from?",
             default=existing_card.get('location', '') if existing_card else '',
             max_length=100,
             required=False
         )
         self.add_item(self.location_input)
         
-        # Bio field
-        self.bio_input = discord.ui.TextInput(
-            label="About Me",
-            style=discord.TextStyle.paragraph,
-            placeholder="Tell us about yourself...",
-            default=existing_card.get('bio', '') if existing_card else '',
-            max_length=500,
-            required=True
-        )
-        self.add_item(self.bio_input)
-        
-        # Hobbies field
+        # Hobby field (single line to match reference design)
         self.hobbies_input = discord.ui.TextInput(
-            label="Hobbies & Interests",
-            style=discord.TextStyle.paragraph,
-            placeholder="What do you enjoy doing?",
+            label="Hobby",
+            placeholder="Your main hobby or interest",
             default=existing_card.get('hobbies', '') if existing_card else '',
-            max_length=300,
+            max_length=100,
             required=False
         )
         self.add_item(self.hobbies_input)
@@ -186,17 +184,17 @@ class IntroCardModal(discord.ui.Modal):
                     await interaction.followup.send("❌ Please enter a valid number for age.", ephemeral=True)
                     return
             
-            # Create card data with fixed theme
+            # Create card data for Wonder member card
             card_data = {
                 'user_id': str(interaction.user.id),
                 'guild_id': str(interaction.guild.id),
                 'name': self.name_input.value.strip(),
                 'age': age,
+                'gender': self.gender_input.value.strip() or None,
                 'location': self.location_input.value.strip() or None,
-                'bio': self.bio_input.value.strip(),
                 'hobbies': self.hobbies_input.value.strip() or None,
-                'favorite_color': '#7C3AED',  # Fixed purple theme
-                'background_style': 'gradient',  # Fixed gradient style
+                'favorite_color': '#9F7AEA',  # Purple theme for Y2K aesthetic
+                'background_style': 'y2k_holographic',  # Y2K holographic style
             }
             
             # Save to database
@@ -204,9 +202,9 @@ class IntroCardModal(discord.ui.Modal):
             
             if card_id:
                 embed = discord.Embed(
-                    title="✅ Introduction Card Saved!",
-                    description="Your introduction card has been created successfully!",
-                    color=0x10B981
+                    title="✅ Wonder Member Card Saved!",
+                    description="Your Wonder member card has been created successfully! ✨",
+                    color=0x9F7AEA
                 )
                 embed.add_field(name="Next Steps", value="Use `/intro-view` to see your card\nUse `/intro-edit` to modify your information", inline=False)
                 await interaction.followup.send(embed=embed, ephemeral=True)
@@ -233,38 +231,36 @@ class IntroCardSystem:
     async def create_card_embed(self, card_data: Dict[str, Any], user: discord.Member) -> discord.Embed:
         """Create an embed for displaying card info"""
         embed = discord.Embed(
-            title=f"👋 Meet {card_data.get('name', 'Unknown')}",
-            color=int(card_data.get('favorite_color', '#7C3AED').replace('#', ''), 16)
+            title=f"🌟 {card_data.get('name', 'Unknown')}'s Wonder Member Card",
+            color=int(card_data.get('favorite_color', '#9F7AEA').replace('#', ''), 16)
         )
         
         # Basic info
         info_parts = []
         if card_data.get('age'):
             info_parts.append(f"🎂 {card_data['age']} years old")
+        if card_data.get('gender'):
+            info_parts.append(f"⚧️ {card_data['gender']}")
         if card_data.get('location'):
-            info_parts.append(f"📍 {card_data['location']}")
+            info_parts.append(f"🏙️ {card_data['location']}")
         
         if info_parts:
-            embed.add_field(name="Basic Info", value="\n".join(info_parts), inline=True)
+            embed.add_field(name="🎮 User Info", value="\n".join(info_parts), inline=True)
         
-        # About section
-        if card_data.get('bio'):
-            embed.add_field(name="About Me", value=card_data['bio'], inline=False)
-        
-        # Hobbies
+        # Hobby
         if card_data.get('hobbies'):
-            embed.add_field(name="Hobbies & Interests", value=card_data['hobbies'], inline=False)
+            embed.add_field(name="🎯 Hobby", value=card_data['hobbies'], inline=True)
         
         # Stats
         stats = f"❤️ {card_data.get('likes_count', 0)} likes • 👀 {card_data.get('views_count', 0)} views"
-        embed.add_field(name="Stats", value=stats, inline=True)
+        embed.add_field(name="📊 Stats", value=stats, inline=False)
         
         # Set user avatar
         embed.set_thumbnail(url=user.display_avatar.url)
         
         # Footer
         created_time = datetime.fromisoformat(card_data['created_at'])
-        embed.set_footer(text=f"Created {created_time.strftime('%B %d, %Y')}")
+        embed.set_footer(text=f"Connected since {created_time.strftime('%B %d, %Y')} • Wonder ✨")
         
         return embed
     
@@ -275,8 +271,8 @@ class IntroCardSystem:
             if card_data.get('id'):
                 await database.add_card_interaction(card_data['id'], str(user.id), 'view')
             
-            # Generate image
-            return await canvas_utils.create_introduction_card(user, card_data)
+            # Generate Wonder member card
+            return await canvas_utils.create_y2k_identity_card(user, card_data)
         except Exception as e:
             logging.error(f"Error generating card image: {e}")
             raise
@@ -285,20 +281,20 @@ class IntroCardSystem:
         """Validate card data"""
         # Check required fields
         if not data.get('name', '').strip():
-            return False, "Name is required"
-        
-        if not data.get('bio', '').strip():
-            return False, "Bio is required"
+            return False, "Nickname is required"
         
         # Check lengths
         if len(data.get('name', '')) > 50:
-            return False, "Name must be 50 characters or less"
+            return False, "Nickname must be 50 characters or less"
         
-        if len(data.get('bio', '')) > 500:
-            return False, "Bio must be 500 characters or less"
+        if data.get('gender') and len(data['gender']) > 50:
+            return False, "Gender must be 50 characters or less"
         
-        if data.get('hobbies') and len(data['hobbies']) > 300:
-            return False, "Hobbies must be 300 characters or less"
+        if data.get('location') and len(data['location']) > 100:
+            return False, "City must be 100 characters or less"
+        
+        if data.get('hobbies') and len(data['hobbies']) > 100:
+            return False, "Hobby must be 100 characters or less"
         
         # Validate age
         if data.get('age') and (data['age'] < 13 or data['age'] > 120):
